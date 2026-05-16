@@ -1,0 +1,103 @@
+# mart-forge mart configuration
+#
+# This file defines a data mart: its name, data sources, schedule,
+# and data quality requirements. The mart-bootstrap skill reads this
+# file to generate a complete dbt project.
+#
+# Required keys are marked with [REQUIRED]. Optional keys have defaults.
+
+mart:
+  # [REQUIRED] Human-readable mart name. Used in dbt_project.yml and CI.
+  # Convention: lowercase, hyphens, no spaces.
+  # Example: "ecommerce-orders-mart", "trading-executions-mart"
+  name: {{ mart.name }}
+
+  # [REQUIRED] Database name for the dbt profile connection.
+  # Example: "ecommerce_db", "trading_db"
+  db_name: {{ mart.db_name }}
+
+  # [REQUIRED] Short prefix (3-5 chars) prepended to every model name.
+  # Convention: lowercase, no underscores.
+  # Example: "ecom", "trd", "saas"
+  prefix: {{ mart.prefix }}
+
+  # [REQUIRED] The atomic grain of the primary fact table.
+  # Format: "per-{entity}-per-{time}" or "per-{entity}"
+  # Example: "per-order-line-per-day", "per-trade-execution"
+  grain: {{ mart.grain }}
+
+  # [OPTIONAL] Semantic version. Increment on breaking changes.
+  # Default: "1.0"
+  version: "1.0"
+
+providers:
+  # [REQUIRED] Primary data source identifier.
+  # Used in ODS provenance columns as the 'provider' value.
+  # Examples: "csv_seed", "api_v2", "postgres_replica", "s3_parquet"
+  primary: {{ providers.primary }}
+
+  # [OPTIONAL] Fallback provider if primary is unavailable.
+  # Set to null if no fallback exists.
+  fallback: null
+
+  # [OPTIONAL] Whether the provider requires authentication.
+  # If true, the pipeline expects credentials in environment variables.
+  auth_required: false
+
+schedule:
+  # [REQUIRED] Cron expression for the daily pipeline run.
+  # Format: standard 5-field cron (minute hour day month weekday)
+  # Example: "0 6 * * *" = every day at 06:00
+  cron: "{{ schedule.cron }}"
+
+  # [OPTIONAL] Timezone for the cron schedule.
+  # Default: "UTC"
+  timezone: {{ schedule.timezone | default("UTC") }}
+
+  # [OPTIONAL] Skip pipeline runs on market holidays.
+  # Only relevant for financial/trading marts.
+  skip_holidays: false
+
+pipeline:
+  # [REQUIRED] Ordered list of dbt commands to execute.
+  # Standard: [seed, run, test]
+  # With snapshots: [seed, snapshot, run, test]
+  steps: [seed, run, test]
+
+  # [OPTIONAL] Stop pipeline on first failure.
+  # Default: true (recommended for data integrity)
+  fail_fast: true
+
+  # [OPTIONAL] Maximum pipeline runtime in minutes before timeout.
+  # Default: 30
+  timeout_minutes: 30
+
+dqc:
+  # [REQUIRED] Whether all 8 DQC control classes must be implemented.
+  # Set to "required" for production marts, "recommended" for development.
+  control_catalog: required
+
+  # [REQUIRED] Path to the DQC scorecard artifact (relative to mart root).
+  scorecard_artifact: dqc_scorecard.json
+
+  # [OPTIONAL] Business reconciliation checks.
+  # Each entry compares a mart metric against an external source.
+  reconciliation:
+    - metric: {{ dqc.reconciliation.metric }}
+      # The external source to compare against.
+      # Examples: "raw_orders_seed", "api_daily_totals", "finance_gl"
+      source: {{ dqc.reconciliation.source }}
+      # Acceptable difference (absolute for counts, relative for amounts).
+      # 0 = exact match, 0.01 = 1% tolerance
+      tolerance: {{ dqc.reconciliation.tolerance }}
+      # "error" = pipeline fails, "warn" = pipeline warns but continues
+      severity: error
+
+# [OPTIONAL] Bus matrix declaration.
+# Lists dimensions used by this mart for cross-mart conformance checking.
+# dimensions:
+#   conformed:
+#     - dim_date          # Shared calendar dimension
+#     - dim_customer      # Shared customer dimension
+#   local:
+#     - dim_promotion     # Mart-specific dimension
