@@ -1,0 +1,76 @@
+{
+  "mart": "ecommerce-orders-mart",
+  "generated_at": "2026-05-16T09:00:00Z",
+  "controls": [
+    {
+      "class": "pk_integrity",
+      "description": "Primary keys are not null and unique across all dimension and fact tables",
+      "models": ["ecom_dim_date", "ecom_dim_customer", "ecom_dim_product", "ecom_dwd_order_line_di", "ecom_dws_daily_revenue_1d", "ecom_dws_customer_lifetime_td", "ecom_ads_executive_dashboard"],
+      "status": "pass",
+      "verified_at": "2026-05-16T09:00:00Z"
+    },
+    {
+      "class": "fk_integrity",
+      "description": "All foreign keys in fact table resolve to dimension rows (including unknown member -1)",
+      "models": ["ecom_dwd_order_line_di"],
+      "fk_checks": ["customer_sk -> ecom_dim_customer", "product_sk -> ecom_dim_product", "order_date_key -> ecom_dim_date"],
+      "status": "pass",
+      "verified_at": "2026-05-16T09:00:00Z"
+    },
+    {
+      "class": "freshness",
+      "description": "ODS pull_ts_utc is populated for all rows",
+      "models": ["ecom_ods_raw_orders"],
+      "status": "pass",
+      "verified_at": "2026-05-16T09:00:00Z"
+    },
+    {
+      "class": "completeness_volume",
+      "description": "Row counts meet minimum thresholds (orders>=500, customers>=50, products>=20, fact>=500)",
+      "models": ["ecom_ods_raw_orders", "ecom_dim_customer", "ecom_dim_product", "ecom_dwd_order_line_di"],
+      "status": "pass",
+      "verified_at": "2026-05-16T09:00:00Z"
+    },
+    {
+      "class": "accepted_ranges",
+      "description": "Numeric values (quantity, prices, revenue) are within plausible non-negative bounds; enums match accepted values",
+      "models": ["ecom_dwd_order_line_di", "ecom_dws_daily_revenue_1d"],
+      "status": "pass",
+      "verified_at": "2026-05-16T09:00:00Z"
+    },
+    {
+      "class": "duplicate_detection",
+      "description": "No duplicate business keys (order_id + line_id) within fact table grain",
+      "models": ["ecom_dwd_order_line_di"],
+      "status": "pass",
+      "verified_at": "2026-05-16T09:00:00Z"
+    },
+    {
+      "class": "null_rate_threshold",
+      "description": "Non-PK columns in fact table do not exceed 5% null rate",
+      "models": ["ecom_dwd_order_line_di"],
+      "status": "pass",
+      "verified_at": "2026-05-16T09:00:00Z"
+    },
+    {
+      "class": "business_reconciliation",
+      "description": "Mart revenue and order count totals match seed CSV totals (tolerance: 0.01 for revenue, exact for counts)",
+      "metrics": [
+        {
+          "metric": "total_revenue",
+          "source": "raw_orders_seed",
+          "tolerance": 0.01,
+          "status": "pass"
+        },
+        {
+          "metric": "total_order_count",
+          "source": "raw_orders_seed",
+          "tolerance": 0,
+          "status": "pass"
+        }
+      ],
+      "status": "pass",
+      "verified_at": "2026-05-16T09:00:00Z"
+    }
+  ]
+}

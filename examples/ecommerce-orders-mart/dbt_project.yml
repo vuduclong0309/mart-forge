@@ -1,0 +1,71 @@
+name: ecommerce_orders_mart
+version: "1.0.0"
+config-version: 2
+
+profile: ecommerce_orders_mart
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+
+clean-targets:
+  - target
+  - dbt_packages
+
+seeds:
+  ecommerce_orders_mart:
+    +schema: raw
+    raw_orders:
+      +column_types:
+        order_id: varchar
+        line_id: integer
+        customer_id: varchar
+        product_id: varchar
+        order_date: date
+        quantity: integer
+        unit_price: double
+        line_total: double
+        status: varchar
+    raw_customers:
+      +column_types:
+        customer_id: varchar
+        customer_name: varchar
+        email: varchar
+        city: varchar
+        state: varchar
+        tier: varchar
+        effective_date: date
+    raw_products:
+      +column_types:
+        product_id: varchar
+        product_name: varchar
+        category: varchar
+        subcategory: varchar
+        unit_price: double
+        supplier: varchar
+    dim_date:
+      +column_types:
+        date_key: integer
+        full_date: date
+        year: integer
+        quarter: integer
+        month: integer
+        month_name: varchar
+        day_of_week: integer
+        day_name: varchar
+        is_weekend: boolean
+        is_holiday: boolean
+
+models:
+  ecommerce_orders_mart:
+    ods:
+      +materialized: view
+    dim:
+      +materialized: table
+    dwd:
+      +materialized: table
+    dws:
+      +materialized: table
+    ads:
+      +materialized: table

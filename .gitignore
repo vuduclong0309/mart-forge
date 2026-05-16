@@ -48,3 +48,9 @@ htmlcov/
 
 # OS
 Thumbs.db
+.venv/
+target/
+*.duckdb
+logs/
+__pycache__/
+dbt_packages/
