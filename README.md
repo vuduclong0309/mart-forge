@@ -28,14 +28,14 @@ Existing tools like [AltimateAI](https://github.com/AltimateAI/altimate-code) fo
 
 mart-forge is an **opinionated, methodology-first framework** that pairs Kimball dimensional modeling best practices with AI agents to scaffold production-grade data marts from the ground up.
 
-| Capability | mart-forge | AltimateAI | Generic dbt Starter |
-|---|---|---|---|
-| **Kimball methodology built-in** | Yes — SCD types, conformed dims, bus matrix | No | No |
-| **AI-assisted modeling** | Yes — agents suggest grain, dimensions, facts | No | No |
-| **Template library** | Yes — reusable mart templates per domain | No | Minimal project scaffold |
-| **Works without existing dbt project** | Yes — generates from scratch | No — requires existing project | Partial |
-| **Methodology documentation** | Yes — auto-generated per mart | No | No |
-| **Target warehouse** | DuckDB (local) / MotherDuck (cloud) | Snowflake, BigQuery, etc. | Any dbt adapter |
+| | AltimateAI (altimate-code) | mart-forge |
+|---|---|---|
+| **Focus** | Deterministic DE tooling for existing dbt projects (lint, lineage, FinOps, validation) | Kimball scaffolding + review methodology for new marts |
+| **Input** | An existing dbt project | `mart.yml` config + data source contract |
+| **Output** | Better SQL, docs, lineage, anti-pattern detection | Scaffolded Kimball mart (ODS → DIM → DWD → DWS → ADS) + DQC scorecard |
+| **Agent model** | Single agent running 100+ deterministic tools | Multi-agent: builder scaffolds, reviewer audits with enforceable gates |
+| **Knowledge base** | Generic SQL patterns, broad warehouse coverage (10+) | Opinionated Kimball methodology, narrow warehouse coverage (dbt-duckdb in v1) |
+| **Quality** | Anti-pattern detection, lineage validation | Control-catalog DQC with reconciliation + machine-readable gate artifacts |
 
 ## Quick Start
 
@@ -65,50 +65,66 @@ mart-forge scaffold --domain "e-commerce orders" --template retail
 claude --skill mart-forge
 ```
 
-### Project Structure After Init
+### What Gets Scaffolded
+
+A `mart.yml` config produces a complete dbt project with Kimball 4-tier layers:
 
 ```
-my-warehouse/
+my-mart/
+├── mart.yml                  # Your domain config
 ├── models/
-│   ├── staging/          # Raw source → cleaned staging
-│   ├── intermediate/     # Business logic transforms
-│   └── marts/            # Kimball-modeled dimensional marts
-│       ├── dim_*.sql     # Dimension tables (SCD handling built-in)
-│       └── fct_*.sql     # Fact tables (grain documented)
-├── seeds/                # Reference data
-├── tests/                # Data quality assertions
-├── docs/                 # Auto-generated methodology docs
-│   └── bus_matrix.md     # Enterprise bus matrix
-└── dbt_project.yml
+│   ├── ods/                  # Operational Data Store — raw ingestion
+│   ├── dim/                  # Dimensions — conformed, SCD-aware
+│   ├── dwd/                  # Detail facts — atomic grain
+│   ├── dws/                  # Summary facts — aggregated
+│   └── ads/                  # Application Data Service — one-big-table
+├── seeds/
+│   └── dim_date.csv          # Reference date dimension
+├── tests/                    # Grain enforcement + business logic
+├── dqc_scorecard.json        # Machine-readable quality gate
+└── .github/workflows/
+    └── daily.yml             # CI/CD + scheduled refresh
 ```
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│                  mart-forge CLI                  │
-├─────────────┬─────────────┬─────────────────────┤
-│  Templates  │   Skills    │   Methodology Docs  │
-│  (Jinja2)   │  (Claude)   │   (Auto-generated)  │
-├─────────────┴─────────────┴─────────────────────┤
-│              Scaffolding Engine                   │
-│  ┌─────────┐ ┌──────────┐ ┌───────────────────┐ │
-│  │ Kimball │ │ Template │ │  Grain + SCD      │ │
-│  │ Rules   │ │ Registry │ │  Validator        │ │
-│  └─────────┘ └──────────┘ └───────────────────┘ │
-├──────────────────────────────────────────────────┤
-│           dbt-core + dbt-duckdb                  │
-├──────────────────────────────────────────────────┤
-│         DuckDB (local) / MotherDuck (cloud)      │
-└──────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                     mart-forge (this repo)                       │
+│                                                                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────────┐ │
+│  │ Methodology  │  │ Mart         │  │ Claude Code Skills     │ │
+│  │ Docs         │  │ Templates    │  │                        │ │
+│  │              │  │              │  │ • mart-bootstrap       │ │
+│  │ • Kimball    │  │ • mart.yml   │  │ • dqc-audit            │ │
+│  │   4-tier     │  │ • models/    │  │ • schema-evolve        │ │
+│  │ • Bus matrix │  │ • seeds/     │  │ • mart-review          │ │
+│  │ • DQC spec   │  │ • tests/     │  │                        │ │
+│  │ • Naming     │  │ • pipeline/  │  │                        │ │
+│  └──────────────┘  └──────────────┘  └────────────────────────┘ │
+│                                                                  │
+│  User: mart.yml ──► Builder Agent ──► Scaffolded Mart            │
+│                          │                    │                   │
+│                          ▼                    ▼                   │
+│                    Reviewer Agent ◄── DQC Scorecard               │
+│                          │                                        │
+│                          ▼                                        │
+│                    Pass/Fail Gate                                  │
+├──────────────────────────────────────────────────────────────────┤
+│                   dbt-core + dbt-duckdb                           │
+├──────────────────────────────────────────────────────────────────┤
+│               DuckDB (local) / MotherDuck (cloud)                │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ## Documentation
 
-- [Methodology Guide](docs/methodology/) — Kimball fundamentals adapted for modern data stacks
-- [Template Catalog](templates/) — Browse and customize mart templates
-- [Skills Reference](skills/) — AI agent skills for assisted scaffolding
-- [Examples](examples/) — End-to-end mart implementations
+- [Bus Matrix](docs/bus-matrix.md) — Enterprise bus matrix design
+- [DQC Framework](docs/dqc-framework.md) — Three-tier data quality contract specification
+- [Naming Conventions](docs/naming-conventions.md) — Table, column, and model naming standards
+- [Agent Orchestration](docs/agent-orchestration.md) — Multi-agent builder/reviewer workflow
+- [Provider Abstraction](docs/provider-abstraction.md) — Warehouse-agnostic design with pluggable adapters
+- [Methodology](METHODOLOGY.md) — Kimball fundamentals and framework philosophy
 
 ## Contributing
 
