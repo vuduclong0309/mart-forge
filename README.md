@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/vuduclong0309/mart-forge/actions"><img src="https://img.shields.io/github/actions/workflow/status/vuduclong0309/mart-forge/ci.yml?branch=main&label=CI" alt="CI Status"></a>
+  <a href="https://github.com/vuduclong0309/mart-forge/actions"><img src="https://img.shields.io/github/actions/workflow/status/vuduclong0309/mart-forge/gme-mart-ci.yml?branch=main&label=CI" alt="CI Status"></a>
   <a href="https://pypi.org/project/mart-forge/"><img src="https://img.shields.io/pypi/v/mart-forge?color=blue" alt="PyPI Version"></a>
   <a href="https://github.com/vuduclong0309/mart-forge/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License"></a>
   <a href="https://github.com/vuduclong0309/mart-forge/stargazers"><img src="https://img.shields.io/github/stars/vuduclong0309/mart-forge" alt="Stars"></a>
@@ -22,20 +22,17 @@ Building a dimensional data warehouse the *right* way — with proper Kimball me
 2. **Hire expensive consultants** who leave behind a warehouse nobody understands
 3. **Use generic dbt starters** that give you project structure but zero domain modeling guidance
 
-Existing tools like [AltimateAI](https://github.com/AltimateAI/altimate-code) focus on optimizing *existing* dbt projects — linting, documentation, and testing for code that's already written. They're excellent at what they do, but they don't help you **design** the warehouse in the first place.
-
 ## What mart-forge Does
 
 mart-forge is an **opinionated, methodology-first framework** that pairs Kimball dimensional modeling best practices with AI agents to scaffold production-grade data marts from the ground up.
 
-| | AltimateAI (altimate-code) | mart-forge |
-|---|---|---|
-| **Focus** | Deterministic DE tooling for existing dbt projects (lint, lineage, FinOps, validation) | Kimball scaffolding + review methodology for new marts |
-| **Input** | An existing dbt project | `mart.yml` config + data source contract |
-| **Output** | Better SQL, docs, lineage, anti-pattern detection | Scaffolded Kimball mart (ODS → DIM → DWD → DWS → ADS) + DQC scorecard |
-| **Agent model** | Single agent running 100+ deterministic tools | Multi-agent: builder scaffolds, reviewer audits with enforceable gates |
-| **Knowledge base** | Generic SQL patterns, broad warehouse coverage (10+) | Opinionated Kimball methodology, narrow warehouse coverage (dbt-duckdb in v1) |
-| **Quality** | Anti-pattern detection, lineage validation | Control-catalog DQC with reconciliation + machine-readable gate artifacts |
+Given a `mart.yml` config and a data source contract, mart-forge scaffolds a complete Kimball mart — ODS, DIM, DWD, DWS, ADS — with a DQC control catalog, CI pipeline, and machine-readable quality gates.
+
+## Inspired By
+
+mart-forge takes inspiration from [AltimateAI's dbt tooling](https://github.com/AltimateAI/altimate-code), which pioneered the approach of applying AI to data engineering workflows. AltimateAI excels at improving *existing* dbt projects through linting, documentation, lineage, and validation.
+
+mart-forge focuses on a different part of the lifecycle: **designing and scaffolding new warehouses** using Kimball methodology as the knowledge base. Where AltimateAI is tool-focused (make your existing project better), mart-forge is methodology-focused (build a new warehouse the right way from the start). They are complementary — use AltimateAI to lint and document the marts that mart-forge scaffolds.
 
 ## Quick Start
 
@@ -51,7 +48,19 @@ mart-forge is an **opinionated, methodology-first framework** that pairs Kimball
 pip install mart-forge
 ```
 
-### Scaffold Your First Mart
+### Run the Live Example
+
+The canonical example pulls live GME options data from CBOE:
+
+```bash
+cd examples/gme-options-mart
+pip install dbt-core dbt-duckdb
+dbt seed --profiles-dir .
+dbt run --profiles-dir .
+dbt test --profiles-dir .
+```
+
+### Scaffold Your Own Mart
 
 ```bash
 # Initialize a new mart-forge project
@@ -59,7 +68,7 @@ mart-forge init my-warehouse
 
 # Use an AI agent to scaffold a mart from a data domain description
 cd my-warehouse
-mart-forge scaffold --domain "e-commerce orders" --template retail
+mart-forge scaffold --domain "your data domain" --template default
 
 # Or run interactively with Claude Code
 claude --skill mart-forge
@@ -72,6 +81,7 @@ A `mart.yml` config produces a complete dbt project with Kimball 4-tier layers:
 ```
 my-mart/
 ├── mart.yml                  # Your domain config
+├── sign-off-prd.md           # Stakeholder sign-off document
 ├── models/
 │   ├── ods/                  # Operational Data Store — raw ingestion
 │   ├── dim/                  # Dimensions — conformed, SCD-aware

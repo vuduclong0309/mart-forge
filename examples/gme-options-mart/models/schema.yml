@@ -1,0 +1,131 @@
+version: 2
+
+models:
+  # --- ODS Layer ---
+  - name: gme_ods_cboe_options_chain
+    description: "ODS layer: raw GME options chain from CBOE delayed quotes (httpfs). Grain: one row per option contract per pull."
+    columns:
+      - name: option_symbol
+        description: "OCC option symbol (e.g. GME260620C00025000)"
+        tests:
+          - not_null
+      - name: pull_date
+        tests:
+          - not_null
+      - name: ticker
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["GME"]
+      - name: provider
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["cboe"]
+      - name: pull_ts_utc
+        tests:
+          - not_null
+      - name: option_type
+        tests:
+          - accepted_values:
+              values: ["call", "put"]
+      - name: strike
+        tests:
+          - not_null
+
+  # --- DIM Layer ---
+  - name: gme_dim_date
+    description: "Conformed date dimension (role-playing). Grain: one row per calendar day."
+    columns:
+      - name: date_key
+        description: "Surrogate key (YYYYMMDD integer)"
+        tests:
+          - not_null
+          - unique
+      - name: full_date
+        tests:
+          - not_null
+          - unique
+      - name: is_trading_day
+        tests:
+          - not_null
+
+  # --- DWD Layer ---
+  - name: gme_dwd_option_contract_di
+    description: "Fact table: cleaned option contracts per day. Grain: one row per contract (strike x expiry x type) per day. GEX computed, series classified."
+    columns:
+      - name: option_symbol
+        description: "OCC symbol — unique within pull_date"
+        tests:
+          - not_null
+      - name: pull_date
+        tests:
+          - not_null
+      - name: strike
+        tests:
+          - not_null
+      - name: expiry
+        tests:
+          - not_null
+      - name: option_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["call", "put"]
+      - name: open_interest
+        tests:
+          - not_null
+      - name: gex_contribution
+        tests:
+          - not_null
+      - name: series_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["WEEKLY", "MONTHLY", "LEAP"]
+
+  # --- DWS Layer ---
+  - name: gme_dws_strike_gex_1d
+    description: "Net GEX by strike, daily. Grain: one row per strike per expiry per day."
+    columns:
+      - name: pull_date
+        tests:
+          - not_null
+      - name: strike
+        tests:
+          - not_null
+      - name: net_gex
+        tests:
+          - not_null
+      - name: gex_rank
+        tests:
+          - not_null
+
+  - name: gme_dws_daily_snapshot_1d
+    description: "Daily market summary: spot, GEX, max pain, P/C ratio, top OI strikes. Grain: one row per day."
+    columns:
+      - name: pull_date
+        tests:
+          - not_null
+          - unique
+      - name: spot
+        tests:
+          - not_null
+      - name: pc_ratio
+        tests:
+          - not_null
+
+  # --- ADS Layer ---
+  - name: gme_ads_warrant_dashboard
+    description: "One-big-table combining daily snapshot with illustrative warrant monitoring. Grain: one row per day."
+    columns:
+      - name: pull_date
+        tests:
+          - not_null
+          - unique
+      - name: spot
+        tests:
+          - not_null
+      - name: warrant_strike
+        tests:
+          - not_null

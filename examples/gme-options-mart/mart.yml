@@ -1,0 +1,31 @@
+mart:
+  name: gme-options-mart
+  db_name: gme_options_db
+  prefix: gme
+  grain: per-contract-per-day
+  version: "1.0"
+
+providers:
+  primary: cboe
+  fallback: null
+  auth_required: false
+
+schedule:
+  cron: "45 20 * * 1-5"
+  timezone: America/New_York
+  skip_holidays: true
+
+pipeline:
+  steps: [seed, run, test]
+  fail_fast: true
+  timeout_minutes: 10
+
+dqc:
+  control_catalog: required
+  scorecard_artifact: dqc_scorecard.json
+  reconciliation:
+    - metric: gex_total
+      source: external_reference
+      tolerance: 0.5
+      severity: warn
+      note: "GEX reconciliation source is paywalled. Waiver per WS-2 finding."

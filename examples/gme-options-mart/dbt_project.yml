@@ -1,0 +1,49 @@
+name: gme_options_mart
+version: "1.0.0"
+config-version: 2
+
+profile: gme_options_mart
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+
+clean-targets:
+  - target
+  - dbt_packages
+
+vars:
+  warrant_strike: 30.0
+  warrant_quantity: 100
+  warrant_expiry: '2026-12-18'
+
+seeds:
+  gme_options_mart:
+    +schema: raw
+    dim_date:
+      +column_types:
+        date_key: integer
+        full_date: date
+        year: integer
+        quarter: integer
+        month: integer
+        month_name: varchar
+        day_of_week: integer
+        day_name: varchar
+        is_weekend: boolean
+        is_holiday: boolean
+        is_trading_day: boolean
+
+models:
+  gme_options_mart:
+    ods:
+      +materialized: table
+    dim:
+      +materialized: table
+    dwd:
+      +materialized: table
+    dws:
+      +materialized: table
+    ads:
+      +materialized: table

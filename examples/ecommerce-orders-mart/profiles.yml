@@ -1,8 +1,0 @@
-ecommerce_orders_mart:
-  target: dev
-  outputs:
-    dev:
-      type: duckdb
-      path: "target/ecommerce.duckdb"
-      schema: main
-      threads: 1
