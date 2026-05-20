@@ -27,6 +27,37 @@ Reads a `mart.yml` configuration file and generates a complete Kimball-layered d
 - **Provenance columns on every ODS** -- `provider`, `pull_ts_utc`, `quote_ts_utc`, `run_id` are non-negotiable.
 - **Unknown member row** -- every DIM must include a row ID = -1 with all attributes = 'Unknown', either via seed or model logic.
 
+## Phase A — Init & Sign-Off (runs first, STOP until sign-off is verified)
+
+Phase A creates the project skeleton and the sign-off PRD. **No models are generated until sign-off is complete.** The agent must STOP after Phase A and wait for the operator to fill and approve the sign-off PRD before proceeding to Phase B.
+
+1. **Read mart.yml** -> verify: confirm all required keys exist (`mart.name`, `mart.prefix`, `mart.grain`, `providers`, `schedule`, `dqc`)
+
+2. **Create directory structure** -> verify: all directories exist
+   ```
+   {mart_name}/
+   +-- models/
+   |   +-- ods/
+   |   +-- dim/
+   |   +-- dwd/
+   |   +-- dws/
+   |   +-- ads/
+   +-- seeds/
+   +-- tests/
+   +-- mart.yml
+   ```
+
+3. **Copy sign-off PRD template** -> verify: file exists at `{mart_name}/sign-off-prd.md`
+   - Source: `templates/sign-off-prd.template.md`
+   - Replace `{{ mart.name }}`, `{{ mart.version }}`, `{{ mart.grain }}`, `{{ providers.primary }}`, `{{ schedule.cron }}`, and other mart.yml-resolvable placeholders with actual values from the config
+   - Leave human-input placeholders (personas, sensitivity classifications, sign-off names) as-is
+
+4. **STOP** -> inform the user that the sign-off PRD must be completed and approved before Phase B can begin. Both sign-off lines (operator + consumer) must have status `approved` or `approved-with-conditions`. Do not proceed until the user confirms sign-off.
+
+## Phase B — Generate Models (only after sign-off is verified)
+
+Before executing any step in Phase B, verify that `{mart_name}/sign-off-prd.md` exists and both sign-off lines in Section 7 have status `approved` or `approved-with-conditions`. If not, STOP and remind the user.
+
 ## Workflow
 
 1. **Read mart.yml** -> verify: confirm all required keys exist (`mart.name`, `mart.prefix`, `mart.grain`, `providers`, `schedule`, `dqc`)
