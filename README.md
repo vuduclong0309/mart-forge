@@ -117,6 +117,12 @@ my-mart/
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+## How to Read This Project
+
+1. **Start with [`bi_req/`](bi_req/PROBLEM_STATEMENT.md)** for the business problem — why this framework exists and who it's for
+2. **Read [`docs/`](docs/)** for methodology — Kimball fundamentals, bus matrix design, DQC framework, naming conventions
+3. **Explore [`examples/`](examples/)** for implementation — working mart scaffolds you can run locally
+
 ## Documentation
 
 - [Bus Matrix](docs/bus-matrix.md) — Enterprise bus matrix design
