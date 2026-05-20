@@ -30,8 +30,11 @@ models:
           - accepted_values:
               values: ["call", "put"]
       - name: strike
+        description: "Option strike price. May be null for non-standard OCC symbols at ODS level — filtered in DWD."
         tests:
-          - not_null
+          - not_null:
+              config:
+                severity: warn
 
   # --- DIM Layer ---
   - name: gme_dim_date
