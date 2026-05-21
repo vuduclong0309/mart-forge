@@ -19,6 +19,8 @@ SELECT
     'GME'                                                             AS ticker,
     'cboe'                                                            AS provider,
     NOW()                                                             AS pull_ts_utc,
+    cboe_timestamp                                                    AS quote_ts_utc,
+    '{{ var("run_id", "manual") }}'                                   AS run_id,
 
     elem['option']                                                    AS option_symbol,
     CAST(elem['bid'] AS DOUBLE)                                       AS bid,
