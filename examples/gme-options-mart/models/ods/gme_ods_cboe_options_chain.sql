@@ -1,6 +1,7 @@
 {{
   config(
-    materialized='table',
+    materialized='incremental',
+    unique_key=['pull_date', 'option_symbol'],
     pre_hook="{{ http_retry_config(var('provider_timeout_ms', 30000), var('provider_retries', 3)) }}"
   )
 }}
