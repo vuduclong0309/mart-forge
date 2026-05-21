@@ -24,7 +24,7 @@ SELECT
     'GME'                                                             AS ticker,
     'cboe'                                                            AS provider,
     CAST(cboe_timestamp AS TIMESTAMP)                                 AS pull_ts_utc,
-    cboe_timestamp                                                    AS quote_ts_utc,
+    CAST(cboe_timestamp AS TIMESTAMP)                                 AS quote_ts_utc,
     '{{ var("run_id", "manual") }}'                                   AS run_id,
 
     elem['option']                                                    AS option_symbol,
@@ -67,7 +67,7 @@ SELECT
 
 FROM raw_unnested
 {% if is_incremental() and not var('backfill', false) %}
-WHERE CURRENT_DATE >= (SELECT COALESCE(MAX(pull_date), '1900-01-01') FROM {{ this }})
+WHERE CURRENT_DATE >= (SELECT COALESCE(MAX(pull_date), DATE '1900-01-01') FROM {{ this }})
 {% endif %}
 
 {% endif %}
