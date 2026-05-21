@@ -308,8 +308,21 @@ def scaffold(domain: str, template_name: str, layers: str) -> None:
         out_path.write_text(content)
         generated.append(f"  models/{layer}/{out_name}")
 
+    dashboard_tpl = tpl_dir / "dashboard"
+    dashboard_dst = Path.cwd() / "dashboard"
+    if dashboard_tpl.is_dir() and not dashboard_dst.exists():
+        shutil.copytree(dashboard_tpl, dashboard_dst)
+        generated.append("  dashboard/app.py")
+        generated.append("  dashboard/requirements.txt")
+
+    dqc_tpl = tpl_dir / "dqc_scorecard.template.json"
+    dqc_dst = Path.cwd() / "dqc_scorecard.json"
+    if dqc_tpl.exists() and not dqc_dst.exists():
+        shutil.copy2(dqc_tpl, dqc_dst)
+        generated.append("  dqc_scorecard.json")
+
     if generated:
-        click.echo(f"Scaffolded {len(generated)} model(s) for '{mart_name}':")
+        click.echo(f"Scaffolded {len(generated)} artifact(s) for '{mart_name}':")
         for g in generated:
             click.echo(g)
         click.echo()
