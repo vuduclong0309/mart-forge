@@ -35,5 +35,8 @@ jobs:
       - name: dbt test
         run: dbt test --profiles-dir .
 
+      - name: Update DQC scorecard from test results
+        run: python ../../scripts/dqc_update.py --run-results target/run_results.json --scorecard dqc_scorecard.json
+
       - name: Verify DQC scorecard exists
         run: test -f dqc_scorecard.json && echo "DQC scorecard present"

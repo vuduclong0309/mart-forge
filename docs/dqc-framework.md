@@ -396,14 +396,48 @@ The `dqc_scorecard.json` file is a machine-readable record of all 8 control clas
 | `pass` | All tests for this control class succeeded |
 | `fail` | One or more tests failed |
 | `pending` | Tests exist but have not been run yet |
-| `unavailable` | Test infrastructure not set up for this class |
+| `exhausted` | All available reconciliation sources attempted; proxy check in place (see Resource Exhaustion below) |
+
+### Resource Exhaustion Loop
+
+Before a control may be marked `exhausted`, the operator must demonstrate that **every plausible data source** has been attempted. The scorecard entry must include an `attempts[]` array documenting each attempt:
+
+```json
+{
+  "attempts": [
+    {
+      "source": "Name of the data source or API",
+      "result": "no_data | paywalled | error | pass",
+      "reason": "Why this source could not satisfy the control",
+      "date": "2026-05-18",
+      "evidence_uri": "URL or file path to evidence"
+    }
+  ]
+}
+```
+
+**Rules:**
+
+1. `exhausted` is only valid when `attempts[]` contains at least **two** entries with `result` != `pass`, demonstrating that multiple sources were investigated.
+2. At least one attempt must have `result: pass` -- the proxy or fallback reconciliation that is actually in place.
+3. A bare waiver with zero investigation attempts is **not valid**. The old `unavailable` status has been retired.
+4. The `waiver_signed_by` and `waiver_date` fields must accompany any `exhausted` entry to record who approved the resource exhaustion conclusion.
+
+### dbt Test Linkage
+
+Each scorecard entry carries two fields that mechanically link it to dbt test results:
+
+- **`linked_dbt_tests`**: Array of dbt test `unique_id` strings (e.g. `test.gme_options_mart.test_dqc_freshness`) that contribute to this control class.
+- **`last_dbt_run`**: ISO 8601 timestamp of the most recent `dbt test` invocation that updated this entry.
+
+These fields are populated automatically by `scripts/dqc_update.py`, which reads `target/run_results.json` after each test run.
 
 ### Usage
 
 - The `dqc-audit` skill reads this file to assess coverage
 - The `mart-review` skill checks it as part of the production readiness grade
-- CI pipelines can parse it to enforce quality gates
-- Two consecutive `unavailable` results escalate to `error` on the third run
+- CI pipelines parse it to enforce quality gates via `scripts/dqc_update.py`
+- `scripts/dqc_update.py` exits non-zero if any control has `fail` status
 
 ---
 

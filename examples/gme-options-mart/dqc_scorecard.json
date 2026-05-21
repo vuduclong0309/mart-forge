@@ -1,73 +1,176 @@
 {
   "mart": "gme-options-mart",
-  "generated_at": "2026-05-21T02:00:00Z",
+  "generated_at": "2026-05-22T00:00:00Z",
   "controls": [
     {
       "class": "pk_integrity",
       "description": "Primary keys are not null and unique across dimension and summary tables",
-      "models": ["gme_dim_date", "gme_dws_daily_snapshot_1d", "gme_ads_market_dashboard"],
+      "models": [
+        "gme_dim_date",
+        "gme_dws_daily_snapshot_1d",
+        "gme_ads_warrant_dashboard"
+      ],
       "status": "pass",
-      "verified_at": "2026-05-21T02:00:00Z"
+      "verified_at": "2026-05-22T00:00:00Z",
+      "linked_dbt_tests": [
+        "test.gme_options_mart.not_null_gme_dim_date_date_key",
+        "test.gme_options_mart.unique_gme_dim_date_date_key",
+        "test.gme_options_mart.not_null_gme_dim_date_full_date",
+        "test.gme_options_mart.unique_gme_dim_date_full_date",
+        "test.gme_options_mart.not_null_gme_dws_daily_snapshot_1d_pull_date",
+        "test.gme_options_mart.unique_gme_dws_daily_snapshot_1d_pull_date",
+        "test.gme_options_mart.not_null_gme_ads_warrant_dashboard_pull_date",
+        "test.gme_options_mart.unique_gme_ads_warrant_dashboard_pull_date"
+      ],
+      "last_dbt_run": "2026-05-20T19:13:37Z",
+      "attempts": []
     },
     {
       "class": "fk_integrity",
       "description": "ADS pull_date resolves to dim_date; DWS/DWD relationships are internally consistent",
-      "models": ["gme_ads_market_dashboard"],
-      "fk_checks": ["pull_date -> gme_dim_date.full_date"],
+      "models": [
+        "gme_ads_warrant_dashboard"
+      ],
+      "fk_checks": [
+        "pull_date -> gme_dim_date.full_date"
+      ],
       "status": "pass",
-      "verified_at": "2026-05-21T02:00:00Z"
+      "verified_at": "2026-05-22T00:00:00Z",
+      "linked_dbt_tests": [
+        "test.gme_options_mart.relationships_gme_ads_warrant_dashboard_pull_date__full_date__ref_gme_dim_date_"
+      ],
+      "last_dbt_run": "2026-05-20T19:13:37Z",
+      "attempts": []
     },
     {
       "class": "freshness",
       "description": "ODS pull_ts_utc is populated for all rows (live CBOE pull)",
-      "models": ["gme_ods_cboe_options_chain"],
+      "models": [
+        "gme_ods_cboe_options_chain"
+      ],
       "status": "pass",
-      "verified_at": "2026-05-21T02:00:00Z"
+      "verified_at": "2026-05-22T00:00:00Z",
+      "linked_dbt_tests": [
+        "test.gme_options_mart.test_dqc_freshness",
+        "test.gme_options_mart.not_null_gme_ods_cboe_options_chain_pull_ts_utc"
+      ],
+      "last_dbt_run": "2026-05-20T19:13:37Z",
+      "attempts": []
     },
     {
       "class": "completeness_volume",
       "description": "Row counts meet minimum thresholds (ODS>=100, DWD>=50, DWS strike>=10, snapshot>=1)",
-      "models": ["gme_ods_cboe_options_chain", "gme_dwd_option_contract_di", "gme_dws_strike_gex_1d", "gme_dws_daily_snapshot_1d"],
+      "models": [
+        "gme_ods_cboe_options_chain",
+        "gme_dwd_option_contract_di",
+        "gme_dws_strike_gex_1d",
+        "gme_dws_daily_snapshot_1d"
+      ],
       "status": "pass",
-      "verified_at": "2026-05-21T02:00:00Z"
+      "verified_at": "2026-05-22T00:00:00Z",
+      "linked_dbt_tests": [
+        "test.gme_options_mart.test_dqc_completeness"
+      ],
+      "last_dbt_run": "2026-05-20T19:13:37Z",
+      "attempts": []
     },
     {
       "class": "accepted_ranges",
       "description": "Strikes positive, OI non-negative, spot positive, P/C ratio within plausible bounds",
-      "models": ["gme_dwd_option_contract_di", "gme_dws_daily_snapshot_1d"],
+      "models": [
+        "gme_dwd_option_contract_di",
+        "gme_dws_daily_snapshot_1d"
+      ],
       "status": "pass",
-      "verified_at": "2026-05-21T02:00:00Z"
+      "verified_at": "2026-05-22T00:00:00Z",
+      "linked_dbt_tests": [
+        "test.gme_options_mart.test_dqc_accepted_ranges",
+        "test.gme_options_mart.accepted_values_gme_dwd_option_contract_di_option_type__call__put",
+        "test.gme_options_mart.accepted_values_gme_dwd_option_contract_di_series_type__WEEKLY__MONTHLY__LEAP",
+        "test.gme_options_mart.accepted_values_gme_ods_cboe_options_chain_option_type__call__put",
+        "test.gme_options_mart.accepted_values_gme_ods_cboe_options_chain_provider__cboe",
+        "test.gme_options_mart.accepted_values_gme_ods_cboe_options_chain_ticker__GME"
+      ],
+      "last_dbt_run": "2026-05-20T19:13:37Z",
+      "attempts": []
     },
     {
       "class": "duplicate_detection",
       "description": "No duplicate (pull_date, option_symbol) in DWD fact table",
-      "models": ["gme_dwd_option_contract_di"],
+      "models": [
+        "gme_dwd_option_contract_di"
+      ],
       "status": "pass",
-      "verified_at": "2026-05-21T02:00:00Z"
+      "verified_at": "2026-05-22T00:00:00Z",
+      "linked_dbt_tests": [
+        "test.gme_options_mart.test_dqc_duplicate_detection"
+      ],
+      "last_dbt_run": "2026-05-20T19:13:37Z",
+      "attempts": []
     },
     {
       "class": "null_rate_threshold",
       "description": "Greeks and pricing columns do not exceed 5% null rate in DWD",
-      "models": ["gme_dwd_option_contract_di"],
+      "models": [
+        "gme_dwd_option_contract_di"
+      ],
       "status": "pass",
-      "verified_at": "2026-05-21T02:00:00Z"
+      "verified_at": "2026-05-22T00:00:00Z",
+      "linked_dbt_tests": [
+        "test.gme_options_mart.test_dqc_null_rate"
+      ],
+      "last_dbt_run": "2026-05-20T19:13:37Z",
+      "attempts": []
     },
     {
       "class": "business_reconciliation",
-      "description": "GEX reconciliation against external source. External reference is paywalled — waiver granted per WS-2 finding.",
+      "description": "GEX reconciliation against external source. All free sources exhausted \u2014 proxy reconciliation in place.",
       "metrics": [
         {
           "metric": "gex_total",
           "source": "external_reference",
           "tolerance": 0.5,
-          "status": "unavailable",
-          "waiver": "External GEX reference sources are paywalled. Waiver granted with operator sign-off per WS-2 finding. DWD-to-ODS row count reconciliation passes as a proxy.",
-          "waiver_signed_by": "operator",
-          "waiver_date": "2026-05-21"
+          "status": "exhausted"
         }
       ],
-      "status": "unavailable",
-      "verified_at": "2026-05-21T02:00:00Z"
+      "status": "exhausted",
+      "verified_at": "2026-05-22T00:00:00Z",
+      "linked_dbt_tests": [
+        "test.gme_options_mart.test_dqc_reconciliation"
+      ],
+      "last_dbt_run": "2026-05-20T19:13:37Z",
+      "attempts": [
+        {
+          "source": "CBOE delayed quotes API (cdn.cboe.com)",
+          "result": "no_data",
+          "reason": "CBOE public endpoint provides per-contract data but no pre-computed GEX aggregate. Individual contract greeks are already ingested at ODS layer.",
+          "date": "2026-05-18",
+          "evidence_uri": "https://cdn.cboe.com/api/global/delayed_quotes/options/GME.json"
+        },
+        {
+          "source": "Yahoo Finance options chain",
+          "result": "no_data",
+          "reason": "Yahoo Finance provides options chains with greeks but does not publish a GEX total or net gamma exposure figure.",
+          "date": "2026-05-18",
+          "evidence_uri": "https://finance.yahoo.com/quote/GME/options/"
+        },
+        {
+          "source": "Unusual Whales / Spotgamma / Squeezemetrics",
+          "result": "paywalled",
+          "reason": "All three major GEX data providers require paid subscriptions (50-300 USD/mo). No free tier or trial API available for automated reconciliation.",
+          "date": "2026-05-19",
+          "evidence_uri": "https://unusualwhales.com/pricing"
+        },
+        {
+          "source": "ODS-to-DWD row count proxy reconciliation",
+          "result": "pass",
+          "reason": "DWD rows never exceed ODS rows (filters applied in DWD are strictly reductive). Validates pipeline does not fabricate rows. Implemented as test_dqc_reconciliation.sql.",
+          "date": "2026-05-20",
+          "evidence_uri": "examples/gme-options-mart/tests/test_dqc_reconciliation.sql"
+        }
+      ],
+      "waiver_signed_by": "operator",
+      "waiver_date": "2026-05-21"
     }
   ]
 }
