@@ -5,14 +5,14 @@
     {
       "class": "pk_integrity",
       "description": "Primary keys are not null and unique across dimension and summary tables",
-      "models": ["gme_dim_date", "gme_dws_daily_snapshot_1d", "gme_ads_warrant_dashboard"],
+      "models": ["gme_dim_date", "gme_dws_daily_snapshot_1d", "gme_ads_market_dashboard"],
       "status": "pass",
       "verified_at": "2026-05-21T02:00:00Z"
     },
     {
       "class": "fk_integrity",
       "description": "ADS pull_date resolves to dim_date; DWS/DWD relationships are internally consistent",
-      "models": ["gme_ads_warrant_dashboard"],
+      "models": ["gme_ads_market_dashboard"],
       "fk_checks": ["pull_date -> gme_dim_date.full_date"],
       "status": "pass",
       "verified_at": "2026-05-21T02:00:00Z"

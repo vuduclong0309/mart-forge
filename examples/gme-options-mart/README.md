@@ -1,6 +1,6 @@
 # GME Options Mart
 
-> **Educational Use Only / Not Financial Advice.** This example mart uses freely available delayed market data from CBOE for educational and framework demonstration purposes. It does not constitute financial advice, trading signals, or investment recommendations. The warrant monitoring columns use illustrative example values, not real positions. Use at your own risk.
+> **Educational Use Only / Not Financial Advice.** This example mart uses freely available delayed market data from CBOE for educational and framework demonstration purposes. It does not constitute financial advice, trading signals, or investment recommendations. Use at your own risk.
 
 Canonical example mart for the mart-forge framework. Demonstrates a complete Kimball data warehouse built on **live CBOE delayed options data** using dbt + DuckDB with httpfs.
 
@@ -14,6 +14,23 @@ dbt run --profiles-dir .
 dbt test --profiles-dir .
 ```
 
+### Dashboard
+
+```bash
+pip install -r dashboard/requirements.txt
+streamlit run dashboard/app.py
+```
+
+Every metric card links to a free public reference site for independent verification:
+
+| Metric | Fact-Check Source |
+|--------|-------------------|
+| Spot Price | [Yahoo Finance](https://finance.yahoo.com/quote/GME) |
+| Max Pain | [SwaggyStocks](https://swaggystocks.com/dashboard/options-max-pain/GME) |
+| P/C Ratio | [Barchart](https://www.barchart.com/stocks/quotes/GME/options-overview) |
+| Net GEX | [SqueezeMetrics](https://squeezemetrics.com/monitor/dix) |
+| IV / Convergence | [MarketChameleon](https://marketchameleon.com/Overview/GME/IV/) |
+
 ## Architecture
 
 **Grain:** per-contract-per-day
@@ -26,7 +43,7 @@ dbt test --profiles-dir .
 | DIM | `gme_dim_date` | Conformed date dimension with trading day flag (seeded 2024-2027) |
 | DWD | `gme_dwd_option_contract_di` | Cleaned option contracts with GEX computed, series classified |
 | DWS | `gme_dws_strike_gex_1d`, `gme_dws_daily_snapshot_1d` | Strike-level GEX + daily summary (max pain, P/C ratio, top OI) |
-| ADS | `gme_ads_warrant_dashboard` | One-big-table combining market snapshot with illustrative warrant monitor |
+| ADS | `gme_ads_market_dashboard` | One-big-table combining market snapshot with calendar attributes |
 
 ### Data Source
 
@@ -41,7 +58,7 @@ Each pull returns ~1300 option contracts with full Greeks (delta, gamma, theta, 
 gme_dwd_option_contract_di       X
 gme_dws_strike_gex_1d            X
 gme_dws_daily_snapshot_1d        X
-gme_ads_warrant_dashboard        X
+gme_ads_market_dashboard         X
 ```
 
 ## Key Derived Metrics
@@ -51,7 +68,6 @@ gme_ads_warrant_dashboard        X
 | GEX contribution | `gamma * OI * 100 * spot^2 * 0.01 * sign(call=+1, put=-1)` | DWD |
 | Max pain | Strike minimizing total exercise value across all contracts | DWS |
 | P/C ratio | Put OI / Call OI | DWS |
-| Warrant moneyness | `(spot - strike) / strike * 100` | ADS |
 
 ## DQC Control Catalog
 
@@ -68,17 +84,4 @@ All 8 control classes implemented:
 | Null-Rate Threshold | Greeks null rate < 5% in DWD | pass |
 | Business Reconciliation | GEX vs external source — **unavailable** (paywalled, waiver granted) | unavailable |
 
-See `dqc_scorecard.json` for the machine-readable scorecard.
-
-## Customization
-
-The `dbt_project.yml` includes configurable variables for the warrant monitoring ADS layer:
-
-```yaml
-vars:
-  warrant_strike: 30.0       # example strike price
-  warrant_quantity: 100       # example contract count
-  warrant_expiry: '2026-12-18'  # example expiry date
-```
-
-Replace these with your own values or remove the `gme_ads_warrant_dashboard` model if warrant monitoring is not relevant to your use case.
+See `dqc_scorecard.json` for the machine-readable scorecard. The dashboard displays a DQC status badge derived from this file.

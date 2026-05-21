@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mart-forge"
+version = "0.1.0"
+description = "Methodology-first Kimball data warehouse scaffolding via AI agents"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [{ name = "vuduclong0309", email = "vuduclong0309@gmail.com" }]
+keywords = ["dbt", "kimball", "data-warehouse", "scaffolding", "dimensional-modeling"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Software Development :: Code Generators",
+]
+dependencies = ["click>=8.0", "pyyaml>=6.0", "jinja2>=3.0"]
+
+[project.urls]
+Homepage = "https://github.com/vuduclong0309/mart-forge"
+Repository = "https://github.com/vuduclong0309/mart-forge"
+Issues = "https://github.com/vuduclong0309/mart-forge/issues"
+
+[project.scripts]
+mart-forge = "mart_forge.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mart_forge"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"templates" = "mart_forge/templates"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/mart_forge", "templates", "README.md", "LICENSE"]
