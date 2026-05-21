@@ -1,6 +1,6 @@
 {
   "mart": "gme-options-mart",
-  "generated_at": "2026-05-22T00:00:00Z",
+  "generated_at": "2026-05-21T20:24:17Z",
   "controls": [
     {
       "class": "pk_integrity",
@@ -11,7 +11,7 @@
         "gme_ads_market_dashboard"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T00:00:00Z",
+      "verified_at": "2026-05-21T20:24:17Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.not_null_gme_dim_date_date_key",
         "test.gme_options_mart.unique_gme_dim_date_date_key",
@@ -35,7 +35,7 @@
         "pull_date -> gme_dim_date.full_date"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T00:00:00Z",
+      "verified_at": "2026-05-21T20:24:17Z",
       "linked_dbt_tests": [],
       "last_dbt_run": "2026-05-20T19:13:37Z",
       "attempts": []
@@ -47,7 +47,7 @@
         "gme_ods_cboe_options_chain"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T00:00:00Z",
+      "verified_at": "2026-05-21T20:24:17Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_freshness",
         "test.gme_options_mart.not_null_gme_ods_cboe_options_chain_pull_ts_utc"
@@ -65,7 +65,7 @@
         "gme_dws_daily_snapshot_1d"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T00:00:00Z",
+      "verified_at": "2026-05-21T20:24:17Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_completeness"
       ],
@@ -80,7 +80,7 @@
         "gme_dws_daily_snapshot_1d"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T00:00:00Z",
+      "verified_at": "2026-05-21T20:24:17Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_accepted_ranges",
         "test.gme_options_mart.accepted_values_gme_dwd_option_contract_di_option_type__call__put",
@@ -99,7 +99,7 @@
         "gme_dwd_option_contract_di"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T00:00:00Z",
+      "verified_at": "2026-05-21T20:24:17Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_duplicate_detection"
       ],
@@ -113,7 +113,7 @@
         "gme_dwd_option_contract_di"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T00:00:00Z",
+      "verified_at": "2026-05-21T20:24:17Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_null_rate"
       ],
@@ -132,7 +132,7 @@
         }
       ],
       "status": "exhausted",
-      "verified_at": "2026-05-22T00:00:00Z",
+      "verified_at": "2026-05-21T20:24:17Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_reconciliation"
       ],

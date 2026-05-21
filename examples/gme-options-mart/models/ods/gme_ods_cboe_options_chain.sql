@@ -8,7 +8,12 @@
 
 {% if var('use_fixture', false) %}
 
-SELECT * FROM read_parquet('fixtures/gme_ods_cboe_options_chain.parquet')
+SELECT pull_date, ticker, provider, pull_ts_utc, quote_ts_utc, run_id,
+       option_symbol, bid, bid_size, ask, ask_size, iv, open_interest, volume,
+       delta, gamma, theta, vega, rho, theo, change, opt_open, opt_high, opt_low,
+       tick, last_trade_price, last_trade_time, percent_change, prev_day_close,
+       expiry, option_type, strike, underlying_close, cboe_timestamp
+FROM read_parquet('fixtures/gme_ods_cboe_options_chain.parquet')
 
 {% else %}
 
