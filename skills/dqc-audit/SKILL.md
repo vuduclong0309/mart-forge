@@ -51,8 +51,9 @@ Validates that a mart implements all 8 required Data Quality Contract control cl
 4. **Check dqc_scorecard.json** -> verify: file exists, parse status of each control
    - All 8 classes present?
    - Any `fail` status? -> report as CRITICAL gap
-   - Any `unavailable` status? -> report as WARNING (check consecutive count)
+   - Any `exhausted` status? -> verify `attempts[]` contains >=2 non-pass entries + >=1 pass entry + `waiver_signed_by` is set; report as WARNING if attempts are insufficient
    - `generated_at` timestamp fresh? (within expected pipeline SLA)
+   - `linked_dbt_tests` populated for each control? `last_dbt_run` recent?
 
 5. **Build coverage matrix** -> verify: every model x every applicable control class has a cell
 
