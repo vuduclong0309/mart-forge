@@ -25,6 +25,14 @@ models:
       - name: pull_ts_utc
         tests:
           - not_null
+      - name: quote_ts_utc
+        description: "Source-side timestamp from CBOE delayed quotes feed"
+        tests:
+          - not_null
+      - name: run_id
+        description: "Pipeline execution identifier for lineage tracing"
+        tests:
+          - not_null
       - name: option_type
         tests:
           - accepted_values:
