@@ -19,7 +19,7 @@ vars:
   provider_max_object_size: 10485760
   provider_timeout_ms: 30000
   provider_retries: 3
-  use_fixture: false
+  use_fixture: true
 
   warrant_strike: 30.0
   warrant_quantity: 100
