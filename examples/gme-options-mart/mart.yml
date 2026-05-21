@@ -9,6 +9,12 @@ providers:
   primary: cboe
   fallback: null
   auth_required: false
+  cboe:
+    url: "https://cdn.cboe.com/api/global/delayed_quotes/options/GME.json"
+    format: json
+    max_object_size: 10485760
+    timeout_ms: 30000
+    retries: 3
 
 schedule:
   cron: "45 20 * * 1-5"

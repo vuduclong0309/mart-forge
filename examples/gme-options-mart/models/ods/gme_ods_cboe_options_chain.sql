@@ -1,25 +1,28 @@
 {{
   config(
-    materialized='incremental',
-    unique_key=['pull_date', 'option_symbol']
+    materialized='table',
+    pre_hook="{{ http_retry_config(var('provider_timeout_ms', 30000), var('provider_retries', 3)) }}"
   )
 }}
+
+{% if var('use_fixture', false) %}
+
+SELECT * FROM read_parquet('fixtures/gme_ods_cboe_options_chain.parquet')
+
+{% else %}
 
 WITH raw_unnested AS (
     SELECT
         unnest(data.options) AS elem,
         data.close AS underlying_close,
         "timestamp" AS cboe_timestamp
-    FROM read_json_auto(
-        'https://cdn.cboe.com/api/global/delayed_quotes/options/GME.json',
-        maximum_object_size=10485760
-    )
+    FROM {{ http_read_json(var('provider_url'), var('provider_max_object_size', 10485760)) }}
 )
 SELECT
     CURRENT_DATE                                                      AS pull_date,
     'GME'                                                             AS ticker,
     'cboe'                                                            AS provider,
-    CAST(cboe_timestamp AS TIMESTAMP)                                 AS pull_ts_utc,
+    NOW()                                                             AS pull_ts_utc,
 
     elem['option']                                                    AS option_symbol,
     CAST(elem['bid'] AS DOUBLE)                                       AS bid,
@@ -60,6 +63,5 @@ SELECT
     cboe_timestamp
 
 FROM raw_unnested
-{% if is_incremental() and not var('backfill', false) %}
-WHERE CURRENT_DATE > (SELECT MAX(pull_date) FROM {{ this }})
+
 {% endif %}
