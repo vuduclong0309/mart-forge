@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "echo '=== mart-forge plugin loaded ===' && echo '' && echo 'Kimball DWH scaffolding framework.' && echo 'Lifecycle: [A] BRD → [B] TDD → sign-off → [C] Scaffold → [D] DQC → [E] Presentation' && echo '' && echo 'Skills available:' && echo '  /using-mart-forge  — Detect phase and route (start here)' && echo '  /mart-bootstrap    — Scaffold a mart from mart.yml' && echo '  /dqc-audit         — Audit DQC coverage' && echo '  /schema-evolve     — Propagate column additions' && echo '  /mart-review       — Production-readiness review' && echo '' && echo 'Key constraints: no SELECT *, provenance on every ODS, all 8 DQC controls required.' && echo 'Run /using-mart-forge to get started.'",
+        "description": "Orient the agent to mart-forge methodology and available skills on session start"
+      }
+    ]
+  }
+}
