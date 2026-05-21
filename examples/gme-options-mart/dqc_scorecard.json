@@ -8,7 +8,7 @@
       "models": [
         "gme_dim_date",
         "gme_dws_daily_snapshot_1d",
-        "gme_ads_warrant_dashboard"
+        "gme_ads_market_dashboard"
       ],
       "status": "pass",
       "verified_at": "2026-05-22T00:00:00Z",
@@ -19,8 +19,8 @@
         "test.gme_options_mart.unique_gme_dim_date_full_date",
         "test.gme_options_mart.not_null_gme_dws_daily_snapshot_1d_pull_date",
         "test.gme_options_mart.unique_gme_dws_daily_snapshot_1d_pull_date",
-        "test.gme_options_mart.not_null_gme_ads_warrant_dashboard_pull_date",
-        "test.gme_options_mart.unique_gme_ads_warrant_dashboard_pull_date"
+        "test.gme_options_mart.not_null_gme_ads_market_dashboard_pull_date",
+        "test.gme_options_mart.unique_gme_ads_market_dashboard_pull_date"
       ],
       "last_dbt_run": "2026-05-20T19:13:37Z",
       "attempts": []
@@ -29,16 +29,14 @@
       "class": "fk_integrity",
       "description": "ADS pull_date resolves to dim_date; DWS/DWD relationships are internally consistent",
       "models": [
-        "gme_ads_warrant_dashboard"
+        "gme_ads_market_dashboard"
       ],
       "fk_checks": [
         "pull_date -> gme_dim_date.full_date"
       ],
       "status": "pass",
       "verified_at": "2026-05-22T00:00:00Z",
-      "linked_dbt_tests": [
-        "test.gme_options_mart.relationships_gme_ads_warrant_dashboard_pull_date__full_date__ref_gme_dim_date_"
-      ],
+      "linked_dbt_tests": [],
       "last_dbt_run": "2026-05-20T19:13:37Z",
       "attempts": []
     },
