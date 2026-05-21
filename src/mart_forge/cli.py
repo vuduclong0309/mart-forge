@@ -262,6 +262,9 @@ def scaffold(domain: str, template_name: str, layers: str) -> None:
     for each requested layer using the bundled templates.
     Requires an approved Tech Design Document (Phase B gate).
     """
+    brd_path = Path.cwd() / "business-requirements.md"
+    _require_approved(brd_path, "Business Requirements Document", "scaffold")
+
     tdd_path = Path.cwd() / "tech-design-doc.md"
     _require_approved(tdd_path, "Tech Design Document", "scaffold")
 

@@ -12,6 +12,16 @@
       "description": "Bootstrap — detects lifecycle phase and routes to the right skill"
     },
     {
+      "name": "mart-brd",
+      "path": "skills/mart-brd/SKILL.md",
+      "description": "Produce a Business Requirements Document (BRD) for a new Kimball mart from client input"
+    },
+    {
+      "name": "mart-tdd",
+      "path": "skills/mart-tdd/SKILL.md",
+      "description": "Generate a Tech Design Document with column-level calculation specs after BRD approval"
+    },
+    {
       "name": "mart-bootstrap",
       "path": "skills/mart-bootstrap/SKILL.md",
       "description": "Scaffold a complete Kimball mart from mart.yml"
