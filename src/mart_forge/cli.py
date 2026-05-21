@@ -1,4 +1,4 @@
-"""mart-forge CLI: init and scaffold commands."""
+"""mart-forge CLI: init, tdd, and scaffold commands."""
 
 from __future__ import annotations
 
@@ -73,6 +73,34 @@ def _find_templates_dir() -> Path:
     raise click.ClickException(
         f"Cannot find templates directory (checked {TEMPLATES_DIR} and {installed})"
     )
+
+
+def _doc_has_approval(path: Path) -> bool:
+    """Return True if a markdown document has at least one approved sign-off row."""
+    content = path.read_text()
+    for line in content.splitlines():
+        cells = [c.strip() for c in line.split("|")]
+        cells = [c for c in cells if c]
+        if len(cells) < 2:
+            continue
+        status = cells[-1].lower()
+        if status in ("approved", "approved-with-conditions"):
+            return True
+    return False
+
+
+def _require_approved(path: Path, doc_label: str, next_phase: str) -> None:
+    """Abort with a helpful message if the document is missing or unapproved."""
+    if not path.exists():
+        raise click.ClickException(
+            f"{doc_label} not found ({path.name}). "
+            f"Complete the previous phase before {next_phase}."
+        )
+    if not _doc_has_approval(path):
+        raise click.ClickException(
+            f"{doc_label} ({path.name}) has no approved sign-off. "
+            f"Get sign-off before proceeding to {next_phase}."
+        )
 
 
 @click.group()
@@ -150,18 +178,64 @@ def init(name: str, db_name: str | None, prefix: str | None) -> None:
 
     (project_dir / ".gitignore").write_text(GITIGNORE)
 
-    sign_off_src = tpl_dir / "sign-off-prd.template.md"
-    if sign_off_src.exists():
-        shutil.copy2(sign_off_src, project_dir / "sign-off-prd.md")
+    brd_src = tpl_dir / "business-requirements.template.md"
+    if brd_src.exists():
+        shutil.copy2(brd_src, project_dir / "business-requirements.md")
 
     click.echo(f"Created mart-forge project in ./{name}/")
-    click.echo(f"  mart.yml          — edit grain, providers, schedule")
-    click.echo(f"  dbt_project.yml   — dbt config (profile: {profile})")
-    click.echo(f"  profiles.yml      — local DuckDB connection")
+    click.echo(f"  mart.yml                  — edit grain, providers, schedule")
+    click.echo(f"  business-requirements.md  — Phase A: fill and get sign-off")
+    click.echo(f"  dbt_project.yml           — dbt config (profile: {profile})")
+    click.echo(f"  profiles.yml              — local DuckDB connection")
     click.echo()
     click.echo("Next steps:")
     click.echo(f"  cd {name}")
+    click.echo(f"  # Fill business-requirements.md and get operator sign-off")
+    click.echo(f"  mart-forge tdd --domain \"your data domain\"")
+    click.echo(f"  # Fill tech-design-doc.md and get reviewer sign-off")
     click.echo(f"  mart-forge scaffold --domain \"your data domain\"")
+
+
+@main.command()
+@click.option(
+    "--domain",
+    required=True,
+    help="Short description of the data domain (used in TDD header).",
+)
+def tdd(domain: str) -> None:
+    """Generate Phase B artifacts (TDD + sign-off PRD) after BRD approval.
+
+    Checks that business-requirements.md has an approved sign-off,
+    then copies the TDD and sign-off PRD templates into the project.
+    """
+    brd_path = Path.cwd() / "business-requirements.md"
+    _require_approved(brd_path, "Business Requirements Document", "TDD generation")
+
+    tpl_dir = _find_templates_dir()
+
+    tdd_src = tpl_dir / "tech-design-doc.template.md"
+    tdd_dst = Path.cwd() / "tech-design-doc.md"
+    if tdd_dst.exists():
+        raise click.ClickException(
+            f"tech-design-doc.md already exists. Remove it to regenerate."
+        )
+    if tdd_src.exists():
+        shutil.copy2(tdd_src, tdd_dst)
+    else:
+        raise click.ClickException("TDD template not found in templates directory.")
+
+    sign_off_src = tpl_dir / "sign-off-prd.template.md"
+    sign_off_dst = Path.cwd() / "sign-off-prd.md"
+    if sign_off_src.exists() and not sign_off_dst.exists():
+        shutil.copy2(sign_off_src, sign_off_dst)
+
+    click.echo(f"Phase B artifacts generated for domain: {domain}")
+    click.echo(f"  tech-design-doc.md  — fill column-level specs and get sign-off")
+    click.echo(f"  sign-off-prd.md     — project sign-off summary")
+    click.echo()
+    click.echo("Next steps:")
+    click.echo(f"  # Fill tech-design-doc.md and get reviewer sign-off")
+    click.echo(f"  mart-forge scaffold --domain \"{domain}\"")
 
 
 @main.command()
@@ -186,7 +260,11 @@ def scaffold(domain: str, template_name: str, layers: str) -> None:
 
     Reads mart.yml in the current directory and generates SQL model files
     for each requested layer using the bundled templates.
+    Requires an approved Tech Design Document (Phase B gate).
     """
+    tdd_path = Path.cwd() / "tech-design-doc.md"
+    _require_approved(tdd_path, "Tech Design Document", "scaffold")
+
     mart_yml = Path.cwd() / "mart.yml"
     if not mart_yml.exists():
         raise click.ClickException(
