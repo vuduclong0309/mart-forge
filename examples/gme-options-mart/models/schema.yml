@@ -127,8 +127,8 @@ models:
           - not_null
 
   # --- ADS Layer ---
-  - name: gme_ads_warrant_dashboard
-    description: "One-big-table combining daily snapshot with illustrative warrant monitoring. Grain: one row per day."
+  - name: gme_ads_market_dashboard
+    description: "One-big-table combining daily snapshot with calendar attributes for dashboard consumption. Grain: one row per day."
     columns:
       - name: pull_date
         tests:
@@ -137,6 +137,6 @@ models:
       - name: spot
         tests:
           - not_null
-      - name: warrant_strike
+      - name: ticker
         tests:
           - not_null

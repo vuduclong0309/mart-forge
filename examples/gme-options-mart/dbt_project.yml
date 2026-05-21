@@ -13,11 +13,6 @@ clean-targets:
   - target
   - dbt_packages
 
-vars:
-  warrant_strike: 30.0
-  warrant_quantity: 100
-  warrant_expiry: '2026-12-18'
-
 seeds:
   gme_options_mart:
     +schema: raw
