@@ -78,7 +78,7 @@ def load_run_results(path: Path) -> tuple[dict, dict, str]:
         if cls is None:
             continue
         class_tests[cls].append(uid)
-        if result["status"] not in ("success", "pass"):
+        if result["status"] not in ("success", "pass", "warn"):
             class_failures[cls].append(uid)
 
     return class_tests, class_failures, generated_at
