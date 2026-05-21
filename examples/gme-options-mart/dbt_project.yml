@@ -37,7 +37,7 @@ models:
     dim:
       +materialized: table
     dwd:
-      +materialized: table
+      +materialized: incremental
     dws:
       +materialized: table
     ads:

@@ -61,5 +61,5 @@ SELECT
 
 FROM raw_unnested
 {% if is_incremental() and not var('backfill', false) %}
-WHERE CURRENT_DATE > (SELECT MAX(pull_date) FROM {{ this }})
+WHERE CURRENT_DATE >= (SELECT COALESCE(MAX(pull_date), '1900-01-01') FROM {{ this }})
 {% endif %}
