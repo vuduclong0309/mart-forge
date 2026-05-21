@@ -179,10 +179,10 @@ WITH gex_agg AS (
     SELECT
         pull_date, ticker,
         SUM(net_gex)                                               AS net_gex,
-        (SELECT strike FROM gme_dws_strike_gex_1d g2
+        (SELECT strike FROM {{ ref('gme_dws_strike_gex_1d') }} g2
          WHERE g2.pull_date = g1.pull_date AND g2.ticker = g1.ticker
          ORDER BY ABS(g2.net_gex) DESC LIMIT 1)                   AS top_gex_strike
-    FROM gme_dws_strike_gex_1d g1
+    FROM {{ ref('gme_dws_strike_gex_1d') }} g1
     GROUP BY pull_date, ticker
 )
 ```
@@ -219,8 +219,8 @@ max_pain AS (
                 THEN (c2.strike - c1.strike) * c2.open_interest * 100
                 ELSE 0
             END) AS total_pain
-        FROM gme_dwd_option_contract_di c1
-        CROSS JOIN gme_dwd_option_contract_di c2
+        FROM {{ ref('gme_dwd_option_contract_di') }} c1
+        CROSS JOIN {{ ref('gme_dwd_option_contract_di') }} c2
         WHERE c1.pull_date = c2.pull_date AND c1.ticker = c2.ticker
         GROUP BY c1.pull_date, c1.ticker, c1.strike
     )
@@ -267,14 +267,14 @@ pc_ratio AS (
         SUM(CASE WHEN option_type = 'put' THEN open_interest ELSE 0 END) * 1.0
         / NULLIF(SUM(CASE WHEN option_type = 'call' THEN open_interest ELSE 0 END), 0)
                                                                     AS pc_ratio
-    FROM gme_dwd_option_contract_di
+    FROM {{ ref('gme_dwd_option_contract_di') }}
     GROUP BY pull_date, ticker
 )
 ```
 
-**Null handling:** `NULLIF(..., 0)` prevents division by zero when no call contracts exist; the ratio returns NULL in that case.
+**Null handling:** `NULLIF(..., 0)` prevents division by zero when no call contracts exist; the ratio returns NULL in that case. In practice, the DWD filter (`WHERE open_interest > 0`) ensures call contracts are always present for an active ticker, so NULL is not expected under normal conditions. The `not_null` test in `schema.yml` validates this assumption — a NULL pc_ratio would indicate a data quality issue (no call activity) that warrants investigation.
 
-**DQC:** Accepted range test validates `pc_ratio BETWEEN 0 AND 50` (`tests/test_dqc_accepted_ranges.sql`).
+**DQC:** Accepted range test validates `pc_ratio BETWEEN 0 AND 50` (`tests/test_dqc_accepted_ranges.sql`). The `not_null` generic test (schema.yml) guards against the zero-call-OI edge case.
 
 **Traceability:**
 | Source column | Source model | Target column | Target model |
@@ -311,9 +311,9 @@ CASE
 END                                                AS series_type
 ```
 
-#### Top OI Strikes (`gme_dws_daily_snapshot_1d.sql`, lines 47-56)
+#### Top OI Strikes (`gme_dws_daily_snapshot_1d.sql`, lines 47-56 CTE, lines 76-81 select)
 
-Aggregates open interest by strike and ranks by total OI descending. Top 3 strikes surfaced in the daily snapshot.
+Aggregates open interest by strike and ranks by total OI descending. Top 3 strikes surfaced in the daily snapshot via correlated subqueries on lines 76-81.
 
 ```sql
 top_oi AS (
@@ -324,7 +324,7 @@ top_oi AS (
         ) AS oi_rank
     FROM (
         SELECT pull_date, ticker, strike, SUM(open_interest) AS open_interest
-        FROM gme_dwd_option_contract_di
+        FROM {{ ref('gme_dwd_option_contract_di') }}
         GROUP BY pull_date, ticker, strike
     )
 )
@@ -390,7 +390,7 @@ Every SQL expression maps to a TDD field; every TDD metric maps to a model and t
 | 6.6 | mid_price | models/dwd/gme_dwd_option_contract_di.sql | 11-14 | — |
 | 6.6 | dte | models/dwd/gme_dwd_option_contract_di.sql | 28 | — |
 | 6.6 | series_type | models/dwd/gme_dwd_option_contract_di.sql | 40-44 | schema.yml: accepted_values [WEEKLY, MONTHLY, LEAP] |
-| 6.6 | top_oi_strike_1/2/3 | models/dws/gme_dws_daily_snapshot_1d.sql | 47-56 | — |
+| 6.6 | top_oi_strike_1/2/3 | models/dws/gme_dws_daily_snapshot_1d.sql | 47-56 (CTE), 76-81 (select) | — |
 | 6.7 | expiry (parsed) | models/ods/gme_ods_cboe_options_chain.sql | 50-54 | — |
 | 6.7 | option_type (parsed) | models/ods/gme_ods_cboe_options_chain.sql | 55-56 | schema.yml: accepted_values [call, put] |
 | 6.7 | strike (parsed) | models/ods/gme_ods_cboe_options_chain.sql | 57-58 | schema.yml: not_null (warn) |
