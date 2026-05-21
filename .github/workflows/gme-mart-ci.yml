@@ -7,7 +7,12 @@ on:
   pull_request:
     paths:
       - "examples/gme-options-mart/**"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      live_provider:
+        description: "Use live CBOE URL instead of fixture"
+        type: boolean
+        default: false
 
 defaults:
   run:
@@ -16,6 +21,8 @@ defaults:
 jobs:
   dbt-pipeline:
     runs-on: ubuntu-latest
+    env:
+      USE_FIXTURE: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.live_provider == 'true') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,10 +37,13 @@ jobs:
         run: dbt seed --profiles-dir .
 
       - name: dbt run
-        run: dbt run --profiles-dir .
+        run: dbt run --profiles-dir . --vars '{"use_fixture": ${{ env.USE_FIXTURE }}}'
 
       - name: dbt test
-        run: dbt test --profiles-dir .
+        run: dbt test --profiles-dir . --vars '{"use_fixture": ${{ env.USE_FIXTURE }}}'
+
+      - name: Update DQC scorecard from test results
+        run: python ../../scripts/dqc_update.py --run-results target/run_results.json --scorecard dqc_scorecard.json
 
       - name: Update DQC scorecard from test results
         run: python ../../scripts/dqc_update.py --run-results target/run_results.json --scorecard dqc_scorecard.json

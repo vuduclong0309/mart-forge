@@ -5,6 +5,7 @@ config-version: 2
 profile: gme_options_mart
 
 model-paths: ["models"]
+macro-paths: ["macros"]
 seed-paths: ["seeds"]
 test-paths: ["tests"]
 analysis-paths: ["analyses"]
@@ -12,6 +13,17 @@ analysis-paths: ["analyses"]
 clean-targets:
   - target
   - dbt_packages
+
+vars:
+  provider_url: "https://cdn.cboe.com/api/global/delayed_quotes/options/GME.json"
+  provider_max_object_size: 10485760
+  provider_timeout_ms: 30000
+  provider_retries: 3
+  use_fixture: false
+
+  warrant_strike: 30.0
+  warrant_quantity: 100
+  warrant_expiry: '2026-12-18'
 
 seeds:
   gme_options_mart:
@@ -33,7 +45,7 @@ seeds:
 models:
   gme_options_mart:
     ods:
-      +materialized: incremental
+      +materialized: table
     dim:
       +materialized: table
     dwd:
