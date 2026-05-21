@@ -37,6 +37,10 @@ packages = ["src/mart_forge"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "templates" = "mart_forge/templates"
+"skills" = "mart_forge/skills"
+".claude-plugin" = "mart_forge/.claude-plugin"
+"hooks" = "mart_forge/hooks"
+"scripts" = "mart_forge/scripts"
 
 [tool.hatch.build.targets.sdist]
-include = ["src/mart_forge", "templates", "README.md", "LICENSE"]
+include = ["src/mart_forge", "templates", "skills", ".claude-plugin", "hooks", "scripts", "README.md", "LICENSE", "CLAUDE.md"]
