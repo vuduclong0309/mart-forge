@@ -1,3 +1,10 @@
+{{
+  config(
+    materialized='incremental',
+    unique_key=['pull_date', 'option_symbol']
+  )
+}}
+
 SELECT
     ods.pull_date,
     ods.ticker,
@@ -51,3 +58,6 @@ FROM {{ ref('gme_ods_cboe_options_chain') }} ods
 WHERE ods.open_interest > 0
   AND ods.strike IS NOT NULL
   AND (ods.expiry - ods.pull_date) >= 7
+{% if is_incremental() and not var('backfill', false) %}
+  AND ods.pull_date >= (SELECT COALESCE(MAX(pull_date), '1900-01-01') FROM {{ this }})
+{% endif %}
