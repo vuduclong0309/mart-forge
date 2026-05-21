@@ -1,0 +1,42 @@
+{
+  "name": "mart-forge",
+  "version": "0.1.0",
+  "description": "Methodology-first Kimball data warehouse scaffolding via AI agents. Provides skills for scaffolding, auditing, evolving, and reviewing Kimball data marts on dbt + DuckDB.",
+  "repository": "https://github.com/vuduclong0309/mart-forge",
+  "license": "Apache-2.0",
+  "hooks": "hooks/hooks.json",
+  "skills": [
+    {
+      "name": "using-mart-forge",
+      "path": "skills/using-mart-forge/SKILL.md",
+      "description": "Bootstrap — detects lifecycle phase and routes to the right skill"
+    },
+    {
+      "name": "mart-bootstrap",
+      "path": "skills/mart-bootstrap/SKILL.md",
+      "description": "Scaffold a complete Kimball mart from mart.yml"
+    },
+    {
+      "name": "dqc-audit",
+      "path": "skills/dqc-audit/SKILL.md",
+      "description": "Audit DQC coverage and produce a gap analysis"
+    },
+    {
+      "name": "schema-evolve",
+      "path": "skills/schema-evolve/SKILL.md",
+      "description": "Propagate source column additions through the layer stack"
+    },
+    {
+      "name": "mart-review",
+      "path": "skills/mart-review/SKILL.md",
+      "description": "Adversarial production-readiness review with graded scorecard"
+    }
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(dbt *)",
+      "Bash(python *)",
+      "Bash(duckdb *)"
+    ]
+  }
+}
