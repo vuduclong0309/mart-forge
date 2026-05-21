@@ -1,6 +1,7 @@
 {{
   config(
-    materialized='table'
+    materialized='incremental',
+    unique_key=['pull_date', 'option_symbol']
   )
 }}
 
@@ -18,9 +19,7 @@ SELECT
     CURRENT_DATE                                                      AS pull_date,
     'GME'                                                             AS ticker,
     'cboe'                                                            AS provider,
-    NOW()                                                             AS pull_ts_utc,
-    cboe_timestamp                                                    AS quote_ts_utc,
-    '{{ var("run_id", "manual") }}'                                   AS run_id,
+    CAST(cboe_timestamp AS TIMESTAMP)                                 AS pull_ts_utc,
 
     elem['option']                                                    AS option_symbol,
     CAST(elem['bid'] AS DOUBLE)                                       AS bid,
@@ -61,3 +60,6 @@ SELECT
     cboe_timestamp
 
 FROM raw_unnested
+{% if is_incremental() and not var('backfill', false) %}
+WHERE CURRENT_DATE > (SELECT MAX(pull_date) FROM {{ this }})
+{% endif %}

@@ -33,7 +33,7 @@ seeds:
 models:
   gme_options_mart:
     ods:
-      +materialized: table
+      +materialized: incremental
     dim:
       +materialized: table
     dwd:
