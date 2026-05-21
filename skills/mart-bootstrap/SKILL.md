@@ -54,9 +54,14 @@ Phase A creates the project skeleton and the sign-off PRD. **No models are gener
 
 4. **STOP** -> inform the user that the sign-off PRD must be completed and approved before Phase B can begin. Both sign-off lines (operator + consumer) must have status `approved` or `approved-with-conditions`. Do not proceed until the user confirms sign-off.
 
-## Phase B — Generate Models (only after sign-off is verified)
+## Phase B — Generate Models (only after sign-off AND TDD are verified)
 
-Before executing any step in Phase B, verify that `{mart_name}/sign-off-prd.md` exists and both sign-off lines in Section 7 have status `approved` or `approved-with-conditions`. If not, STOP and remind the user.
+Before executing any step in Phase B, verify **both gates**:
+
+1. **Phase A gate:** `{mart_name}/sign-off-prd.md` exists and both sign-off lines have status `approved` or `approved-with-conditions`
+2. **Phase B gate:** `{mart_name}/tech-design-doc.md` exists and both sign-off lines have status `approved` or `approved-with-conditions`
+
+If either gate fails, STOP and inform the user which document is missing or unsigned. Use `skills/mart-tdd/` to generate the TDD if Phase A is complete but Phase B is not.
 
 ## Workflow
 
