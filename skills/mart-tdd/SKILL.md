@@ -11,7 +11,7 @@ description: |
   - Phase A (BRD sign-off) is complete and the user wants Phase B design
 
   **Not for:**
-  - Scaffolding directory structure or generating dbt code (use mart-bootstrap Phase B after TDD sign-off)
+  - Scaffolding directory structure or generating dbt code (use mart-bootstrap after TDD sign-off)
   - Reviewing existing models (use mart-review)
   - Auditing DQC coverage (use dqc-audit)
 ---
