@@ -74,18 +74,19 @@ gme_ads_market_dashboard         X
 OpenBB Platform is registered as a reconciliation provider for independent GEX cross-verification. A probe script tests each OpenBB provider for GME options chain data:
 
 ```bash
-pip install 'openbb>=4.5'
+uv venv /tmp/openbb-probe && source /tmp/openbb-probe/bin/activate
+uv pip install 'openbb>=4.5' openbb-tradier
 python scripts/openbb_gex_probe.py --pretty
 ```
 
-Providers attempted (OpenBB 4.7.1, 2026-05-22):
+Providers attempted (OpenBB 4.7.1, openbb-tradier 1.5.0, 2026-05-22):
 
 | Provider | Result | Reason |
 |----------|--------|--------|
 | `cboe` | not independent | Same cdn.cboe.com endpoint as primary ODS — not a separate source |
 | `yfinance` | insufficient fields | Returns 905 contracts but **no gamma column** — GEX not computable |
-| `intrinio` | credentials required | Paid API key needed |
-| `tradier` | not available | Not supported for `options.chains` in OpenBB 4.7.1 |
+| `intrinio` | credentials required | Paid API key (`intrinio_api_key`) needed |
+| `tradier` | credentials required | Available via `openbb-tradier`; requires `tradier_api_key` |
 
 If a future OpenBB provider or yfinance update adds gamma to the response, re-run the probe to upgrade business reconciliation from proxy to direct.
 

@@ -18,7 +18,7 @@ providers:
   reconciliation:
     - name: openbb
       role: gex_reconciliation
-      install: "pip install 'openbb>=4.5'"
+      install: "pip install 'openbb>=4.5' openbb-tradier"
       probe_command: "python scripts/openbb_gex_probe.py --pretty"
       providers_attempted:
         - cboe

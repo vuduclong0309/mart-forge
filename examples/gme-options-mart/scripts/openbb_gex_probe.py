@@ -9,8 +9,13 @@ GEX formula (per contract):
 
 Required fields: gamma, open_interest, underlying_price (spot), option_type.
 
-Usage:
-    pip install 'openbb>=4.5'
+Usage (isolated venv via uv):
+    uv venv /tmp/openbb-probe && source /tmp/openbb-probe/bin/activate
+    uv pip install 'openbb>=4.5' openbb-tradier
+    python scripts/openbb_gex_probe.py --pretty
+
+Or via pip:
+    pip install 'openbb>=4.5' openbb-tradier
     python scripts/openbb_gex_probe.py            # JSON to stdout
     python scripts/openbb_gex_probe.py --pretty    # human-readable
 """
@@ -134,7 +139,7 @@ def main():
     except ImportError:
         print(json.dumps({
             "error": "openbb not installed",
-            "install": "pip install 'openbb>=4.5'",
+            "install": "pip install 'openbb>=4.5' openbb-tradier",
         }), file=sys.stderr)
         sys.exit(1)
 
@@ -152,6 +157,7 @@ def main():
             "openbb-cboe": _pkg_version("openbb-cboe"),
             "openbb-yfinance": _pkg_version("openbb-yfinance"),
             "openbb-intrinio": _pkg_version("openbb-intrinio"),
+            "openbb-tradier": _pkg_version("openbb-tradier"),
         },
         "symbol": SYMBOL,
         "gex_formula": "gamma * OI * 100 * spot^2 * 0.01 * sign(call=+1, put=-1)",

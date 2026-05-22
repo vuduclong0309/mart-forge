@@ -176,21 +176,27 @@
           "result": "insufficient_fields",
           "reason": "yfinance returns 905 contracts with open_interest, underlying_price, strike, implied_volatility, option_type \u2014 but no gamma column. Without gamma, GEX cannot be computed. OpenBB v4.7.1, openbb-yfinance v1.6.2.",
           "date": "2026-05-22",
-          "evidence_uri": "examples/gme-options-mart/scripts/openbb_gex_probe.py"
+          "evidence_uri": "examples/gme-options-mart/scripts/openbb_gex_probe.py",
+          "command": "from openbb import obb; resp = obb.derivatives.options.chains('GME', provider='yfinance'); df = resp.to_df(); print(sorted(df.columns.tolist()))",
+          "columns_returned": ["ask", "bid", "change", "change_percent", "contract_symbol", "currency", "dte", "expiration", "implied_volatility", "in_the_money", "last_trade_price", "last_trade_time", "open_interest", "option_type", "strike", "underlying_price", "underlying_symbol", "volume"]
         },
         {
           "source": "OpenBB intrinio provider (obb.derivatives.options.chains, provider='intrinio')",
           "result": "credentials_required",
           "reason": "Intrinio requires a paid API key (intrinio_api_key). No free tier available for options chain data with greeks.",
           "date": "2026-05-22",
-          "evidence_uri": "https://docs.openbb.co/platform/settings/user_settings/api_keys"
+          "evidence_uri": "https://docs.openbb.co/platform/settings/user_settings/api_keys",
+          "command": "from openbb import obb; obb.derivatives.options.chains('GME', provider='intrinio')",
+          "exception": "OpenBBError: [Error] -> Missing credential 'intrinio_api_key'"
         },
         {
-          "source": "OpenBB tradier provider",
-          "result": "not_available",
-          "reason": "Tradier is not a supported provider for obb.derivatives.options.chains in OpenBB 4.7.1. Valid providers: cboe, intrinio, yfinance.",
+          "source": "OpenBB tradier provider (obb.derivatives.options.chains, provider='tradier')",
+          "result": "credentials_required",
+          "reason": "Tradier available after installing openbb-tradier (v1.5.0), but requires tradier_api_key. OpenBBError: Missing credential 'tradier_api_key'.",
           "date": "2026-05-22",
-          "evidence_uri": "examples/gme-options-mart/scripts/openbb_gex_probe.py"
+          "evidence_uri": "examples/gme-options-mart/scripts/openbb_gex_probe.py",
+          "command": "uv pip install openbb-tradier && python -c \"from openbb import obb; obb.derivatives.options.chains('GME', provider='tradier')\"",
+          "exception": "OpenBBError: [Error] -> Missing credential 'tradier_api_key'"
         },
         {
           "source": "CBOE delayed quotes API (cdn.cboe.com) \u2014 direct",
