@@ -1,6 +1,6 @@
 {
   "mart": "gme-options-mart",
-  "generated_at": "2026-05-22T18:54:47Z",
+  "generated_at": "2026-05-22T18:59:37Z",
   "controls": [
     {
       "class": "pk_integrity",
@@ -12,7 +12,7 @@
         "gme_ads_market_dashboard"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:54:47Z",
+      "verified_at": "2026-05-22T18:59:37Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.not_null_gme_ads_market_dashboard_dealer_net_gamma.95562269f2",
         "test.gme_options_mart.not_null_gme_ads_market_dashboard_gamma_flip_point.abd44ef757",
@@ -57,7 +57,7 @@
         "test.gme_options_mart.unique_gme_dws_daily_snapshot_1d_pull_date.f85b6c2641",
         "test.gme_options_mart.unique_gme_dws_options_metrics_1d_pull_date.6791f82288"
       ],
-      "last_dbt_run": "2026-05-22T18:54:47Z",
+      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
       "attempts": []
     },
     {
@@ -70,11 +70,11 @@
         "pull_date -> gme_dim_date.full_date"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:54:47Z",
+      "verified_at": "2026-05-22T18:59:37Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.relationships_gme_ads_market_dashboard_pull_date__full_date__ref_gme_dim_date_.c8f69bb9b8"
       ],
-      "last_dbt_run": "2026-05-22T18:54:47Z",
+      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
       "attempts": []
     },
     {
@@ -84,11 +84,11 @@
         "gme_ods_cboe_options_chain"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:54:47Z",
+      "verified_at": "2026-05-22T18:59:37Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_freshness"
       ],
-      "last_dbt_run": "2026-05-22T18:54:47Z",
+      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
       "attempts": []
     },
     {
@@ -102,11 +102,11 @@
         "gme_dws_options_metrics_1d"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:54:47Z",
+      "verified_at": "2026-05-22T18:59:37Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_completeness"
       ],
-      "last_dbt_run": "2026-05-22T18:54:47Z",
+      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
       "attempts": []
     },
     {
@@ -118,17 +118,17 @@
         "gme_dws_options_metrics_1d"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:54:47Z",
+      "verified_at": "2026-05-22T18:59:37Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.accepted_values_gme_dwd_option_contract_di_option_type__call__put.bb067ff468",
         "test.gme_options_mart.accepted_values_gme_dwd_option_contract_di_series_type__WEEKLY__MONTHLY__LEAP.8c855bd6c2",
+        "test.gme_options_mart.accepted_values_gme_dws_options_metrics_1d_ticker__GME.8f1f9e3005",
         "test.gme_options_mart.accepted_values_gme_ods_cboe_options_chain_option_type__call__put.9b0248d0fb",
         "test.gme_options_mart.accepted_values_gme_ods_cboe_options_chain_provider__cboe.3f502d09eb",
         "test.gme_options_mart.accepted_values_gme_ods_cboe_options_chain_ticker__GME.56d8a70262",
-        "test.gme_options_mart.accepted_values_gme_dws_options_metrics_1d_ticker__GME.8f1f9e3005",
         "test.gme_options_mart.test_dqc_accepted_ranges"
       ],
-      "last_dbt_run": "2026-05-22T18:54:47Z",
+      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
       "attempts": []
     },
     {
@@ -138,11 +138,11 @@
         "gme_dwd_option_contract_di"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:54:47Z",
+      "verified_at": "2026-05-22T18:59:37Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_duplicate_detection"
       ],
-      "last_dbt_run": "2026-05-22T18:54:47Z",
+      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
       "attempts": []
     },
     {
@@ -152,16 +152,16 @@
         "gme_dwd_option_contract_di"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:54:47Z",
+      "verified_at": "2026-05-22T18:59:37Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_null_rate"
       ],
-      "last_dbt_run": "2026-05-22T18:54:47Z",
+      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
       "attempts": []
     },
     {
       "class": "business_reconciliation",
-      "description": "GEX reconciliation against external source. OpenBB providers probed (cboe, yfinance, intrinio, tradier) — no free provider returns gamma for independent GEX computation. Proxy reconciliation in place.",
+      "description": "GEX reconciliation against external source. OpenBB providers probed (cboe, yfinance, intrinio, tradier) \u2014 no free provider returns gamma for independent GEX computation. Proxy reconciliation in place.",
       "metrics": [
         {
           "metric": "gex_total",
@@ -175,7 +175,7 @@
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_reconciliation"
       ],
-      "last_dbt_run": "2026-05-22T18:54:47Z",
+      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
       "attempts": [
         {
           "source": "OpenBB cboe provider (obb.derivatives.options.chains, provider='cboe')",
@@ -188,11 +188,30 @@
         {
           "source": "OpenBB yfinance provider (obb.derivatives.options.chains, provider='yfinance')",
           "result": "insufficient_fields",
-          "reason": "yfinance returns 905 contracts with open_interest, underlying_price, strike, implied_volatility, option_type — but no gamma column. Without gamma, GEX cannot be computed. OpenBB v4.7.1, openbb-yfinance v1.6.2.",
+          "reason": "yfinance returns 905 contracts with open_interest, underlying_price, strike, implied_volatility, option_type \u2014 but no gamma column. Without gamma, GEX cannot be computed. OpenBB v4.7.1, openbb-yfinance v1.6.2.",
           "date": "2026-05-22",
           "evidence_uri": "examples/gme-options-mart/scripts/openbb_gex_probe.py",
           "command": "python scripts/openbb_gex_probe.py --providers yfinance",
-          "columns_returned": ["ask", "bid", "change", "change_percent", "contract_symbol", "currency", "dte", "expiration", "implied_volatility", "in_the_money", "last_trade_price", "last_trade_time", "open_interest", "option_type", "strike", "underlying_price", "underlying_symbol", "volume"]
+          "columns_returned": [
+            "ask",
+            "bid",
+            "change",
+            "change_percent",
+            "contract_symbol",
+            "currency",
+            "dte",
+            "expiration",
+            "implied_volatility",
+            "in_the_money",
+            "last_trade_price",
+            "last_trade_time",
+            "open_interest",
+            "option_type",
+            "strike",
+            "underlying_price",
+            "underlying_symbol",
+            "volume"
+          ]
         },
         {
           "source": "OpenBB intrinio provider (obb.derivatives.options.chains, provider='intrinio')",
@@ -213,7 +232,7 @@
           "exception": "OpenBBError: Missing credential 'tradier_api_key'"
         },
         {
-          "source": "CBOE delayed quotes API (cdn.cboe.com) — direct",
+          "source": "CBOE delayed quotes API (cdn.cboe.com) \u2014 direct",
           "result": "no_data",
           "reason": "CBOE public endpoint provides per-contract greeks (already ingested at ODS layer) but no pre-computed GEX aggregate for reconciliation.",
           "date": "2026-05-18",
