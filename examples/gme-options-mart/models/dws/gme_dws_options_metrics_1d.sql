@@ -20,7 +20,9 @@ cum_gex AS (
 ),
 
 cum_gex_with_next AS (
-    SELECT *,
+    SELECT
+        pull_date, ticker, strike, net_gex_at_strike,
+        cum_gex, next_strike,
         LEAD(cum_gex) OVER (
             PARTITION BY pull_date, ticker ORDER BY strike
         ) AS next_cum_gex
