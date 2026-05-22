@@ -2,7 +2,7 @@
 
 > **Educational Use Only / Not Financial Advice.** This example mart uses freely available delayed market data from CBOE for educational and framework demonstration purposes. It does not constitute financial advice, trading signals, or investment recommendations. Use at your own risk.
 
-Canonical example mart for the mart-forge framework. Demonstrates a complete Kimball data warehouse built on **live CBOE delayed options data** using dbt + DuckDB with httpfs.
+Canonical example mart for the mart-forge framework. Demonstrates a complete Kimball data warehouse using dbt + DuckDB. Runs **offline by default** using a bundled Parquet fixture; set `use_fixture: false` in `dbt_project.yml` to pull live delayed data from CBOE via httpfs.
 
 ## Quick Start
 
@@ -39,7 +39,7 @@ Every metric card links to a free public reference site for independent verifica
 
 | Layer | Models | Description |
 |-------|--------|-------------|
-| ODS | `gme_ods_cboe_options_chain` | Live ingestion from CBOE delayed quotes via httpfs (read_json_auto) |
+| ODS | `gme_ods_cboe_options_chain` | Fixture-backed by default (Parquet); live CBOE via httpfs when `use_fixture: false` |
 | DIM | `gme_dim_date` | Conformed date dimension with trading day flag (seeded 2024-2027) |
 | DWD | `gme_dwd_option_contract_di` | Cleaned option contracts with GEX computed, series classified |
 | DWS | `gme_dws_strike_gex_1d`, `gme_dws_daily_snapshot_1d` | Strike-level GEX + daily summary (max pain, P/C ratio, top OI) |
@@ -47,9 +47,9 @@ Every metric card links to a free public reference site for independent verifica
 
 ### Data Source
 
-CBOE provides free delayed options quotes (15-min lag) at `cdn.cboe.com`. The ODS model uses DuckDB's httpfs extension to read JSON directly — no API key, no Python scripts, no intermediate files.
+By default, the ODS reads from `fixtures/gme_ods_cboe_options_chain.parquet` — a bundled snapshot of ~1300 option contracts with full Greeks (delta, gamma, theta, vega, rho, IV). This makes the example fully offline and deterministic.
 
-Each pull returns ~1300 option contracts with full Greeks (delta, gamma, theta, vega, rho, IV) computed by CBOE.
+To switch to live data, set `use_fixture: false` in `dbt_project.yml`. CBOE provides free delayed quotes (15-min lag) at `cdn.cboe.com`; the ODS model uses DuckDB's httpfs extension to read JSON directly — no API key or intermediate files needed.
 
 ## Bus Matrix
 
