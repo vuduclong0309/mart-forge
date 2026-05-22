@@ -21,16 +21,39 @@
 
 with primary_summary as (
     -- Primary DWS model (e.g., daily revenue, daily metrics)
-    select * from {{ ref('{{ mart.prefix }}_dws_{{ primary_dws_model }}') }}
+    select
+        {{ primary_date_key }},
+        {{ primary_measure_1 }},
+        {{ primary_measure_2 }},
+        {{ primary_measure_3 }},
+        {{ primary_measure_4 }}
+        -- FIXME: add remaining columns needed from {{ primary_dws_model }}
+    from {{ ref('{{ mart.prefix }}_dws_{{ primary_dws_model }}') }}
 ),
 
 secondary_summary as (
     -- Secondary DWS model (e.g., customer lifetime, entity aggregations)
-    select * from {{ ref('{{ mart.prefix }}_dws_{{ secondary_dws_model }}') }}
+    select
+        {{ entity_nk }},
+        {{ lifetime_measure }},
+        {{ repeat_threshold_column }}
+        -- FIXME: add remaining columns needed from {{ secondary_dws_model }}
+    from {{ ref('{{ mart.prefix }}_dws_{{ secondary_dws_model }}') }}
 ),
 
 date_dim as (
-    select * from {{ ref('{{ mart.prefix }}_dim_date') }}
+    select
+        date_key,
+        full_date,
+        year,
+        quarter,
+        month,
+        month_name,
+        day_name,
+        is_weekend,
+        is_holiday,
+        {{ date_join_key }}
+    from {{ ref('{{ mart.prefix }}_dim_date') }}
 ),
 
 -- =====================================================================
@@ -99,7 +122,28 @@ summary_stats as (
 -- =====================================================================
 
 select
-    e.*,
+    -- Date dimension attributes
+    e.date_key,
+    e.full_date,
+    e.year,
+    e.quarter,
+    e.month,
+    e.month_name,
+    e.day_name,
+    e.is_weekend,
+    e.is_holiday,
+
+    -- Primary measures
+    e.{{ primary_measure_1 }},
+    e.{{ primary_measure_2 }},
+    e.{{ primary_measure_3 }},
+    e.{{ primary_measure_4 }},
+
+    -- Running totals
+    e.mtd_{{ primary_measure_1 }},
+    e.ytd_{{ primary_measure_1 }},
+
+    -- Summary stats (cross-joined scalar KPIs)
     s.total_{{ entity_name_plural }},
     s.grand_total_{{ lifetime_measure }},
     s.avg_{{ entity_name }}_{{ lifetime_measure }},
