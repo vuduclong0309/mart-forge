@@ -36,7 +36,11 @@ with source as (
 -- For Type 1, replace this section with a simple select + row_number for SK.
 ranked as (
     select
-        *,
+        {{ natural_key }},
+        {{ attribute_1 }},
+        {{ attribute_2 }},
+        {{ attribute_3 }},
+        {{ effective_date_column }},
         row_number() over (
             partition by {{ natural_key }} order by {{ effective_date_column }}
         ) as rn,
@@ -91,9 +95,27 @@ unknown_member as (
         true as is_current
 )
 
-select * from scd2
+select
+    {{ entity_name }}_sk,
+    {{ natural_key }},
+    {{ attribute_1 }},
+    {{ attribute_2 }},
+    {{ attribute_3 }},
+    effective_from,
+    effective_to,
+    is_current
+from scd2
 union all
-select * from unknown_member
+select
+    {{ entity_name }}_sk,
+    {{ natural_key }},
+    {{ attribute_1 }},
+    {{ attribute_2 }},
+    {{ attribute_3 }},
+    effective_from,
+    effective_to,
+    is_current
+from unknown_member
 
 
 -- =====================================================================
@@ -130,6 +152,18 @@ select * from unknown_member
 --         'Unknown' as {{ attribute_3 }}
 -- )
 --
--- select * from with_sk
+-- select
+--     {{ entity_name }}_sk,
+--     {{ natural_key }},
+--     {{ attribute_1 }},
+--     {{ attribute_2 }},
+--     {{ attribute_3 }}
+-- from with_sk
 -- union all
--- select * from unknown_member
+-- select
+--     {{ entity_name }}_sk,
+--     {{ natural_key }},
+--     {{ attribute_1 }},
+--     {{ attribute_2 }},
+--     {{ attribute_3 }}
+-- from unknown_member
