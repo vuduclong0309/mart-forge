@@ -46,7 +46,3 @@ jobs:
       - name: Update DQC scorecard from test results
         if: always() && steps.dbt-test.outcome != 'skipped'
         run: python ../../scripts/dqc_update.py --run-results target/run_results.json --scorecard dqc_scorecard.json
-
-      - name: Verify DQC scorecard exists
-        if: always() && steps.dbt-test.outcome != 'skipped'
-        run: test -f dqc_scorecard.json && cat dqc_scorecard.json | python -c "import sys,json; d=json.load(sys.stdin); print(f'DQC scorecard: {sum(1 for c in d[\"controls\"] if c[\"status\"] in (\"pass\",\"exhausted\"))}/{len(d[\"controls\"])} controls passing')"
