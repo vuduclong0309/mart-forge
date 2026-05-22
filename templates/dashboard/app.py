@@ -7,17 +7,16 @@ metric cards with optional fact-check links.
 Customization points (search "TEMPLATE"):
   - DB_PATH: path to the DuckDB database produced by `dbt run`
   - ADS_TABLE: name of the ADS model
+  - _LATEST_COLUMNS: explicit column list to fetch from the ADS table
   - METRIC_CARDS: list of dicts defining each card
   - DQC_SCORECARD: path to dqc_scorecard.json
 
 Usage:
-  streamlit run app.py [-- --columns col1,col2,...]
+  streamlit run app.py
 """
 
-import argparse
 import json
 import pathlib
-import sys
 
 import duckdb
 import streamlit as st
@@ -36,14 +35,10 @@ METRIC_CARDS: list[dict] = [
     #  "verify_url": "https://example.com/revenue-check"},
 ]
 
-# ── --columns override ─────────────────────────────────────────────
-_parser = argparse.ArgumentParser(add_help=False)
-_parser.add_argument(
-    "--columns", default=None,
-    help="Comma-separated column list to fetch instead of SELECT *",
-)
-_args, _ = _parser.parse_known_args(sys.argv[1:])
-COLUMN_OVERRIDE: str | None = _args.columns
+# ── TEMPLATE: columns to fetch from ADS table ─────────────────────
+# Replace with the actual columns from your ADS model.
+# Example: _LATEST_COLUMNS = "pull_date, spot, max_pain_strike, pc_ratio"
+_LATEST_COLUMNS = "{{ ads_columns }}"
 
 st.set_page_config(page_title="{{ mart_name }} Dashboard", layout="wide")
 
@@ -56,16 +51,8 @@ def get_db():
 @st.cache_data(ttl=300)
 def load_latest():
     db = get_db()
-    if COLUMN_OVERRIDE:
-        cols = ", ".join(c.strip() for c in COLUMN_OVERRIDE.split(","))
-    else:
-        # FIXME(select-star): SELECT * is a template placeholder — users MUST
-        # replace it with an explicit column list for their mart, or pass
-        # --columns at runtime.  ADS column sets vary per mart, so the
-        # template cannot hard-code them.
-        cols = "*"
     return db.sql(
-        f"SELECT {cols} FROM {ADS_TABLE} ORDER BY pull_date DESC LIMIT 1"
+        f"SELECT {_LATEST_COLUMNS} FROM {ADS_TABLE} ORDER BY pull_date DESC LIMIT 1"
     ).fetchdf()
 
 
@@ -80,11 +67,19 @@ def dqc_badge(scorecard: dict | None) -> str:
     if not scorecard:
         return ":gray[DQC: unknown]"
     statuses = [c["status"] for c in scorecard.get("controls", [])]
+    if not statuses:
+        return ":gray[DQC: UNKNOWN]"
     if any(s == "fail" for s in statuses):
         return ":red[DQC: FAIL]"
     if any(s == "unavailable" for s in statuses):
         return ":orange[DQC: PARTIAL]"
-    return ":green[DQC: PASS]"
+    if any(s in ("exhausted", "waived") for s in statuses):
+        return ":orange[DQC: PASS WITH WAIVERS]"
+    if any(s == "pending" for s in statuses):
+        return ":orange[DQC: PENDING]"
+    if all(s == "pass" for s in statuses):
+        return ":green[DQC: PASS]"
+    return ":gray[DQC: UNKNOWN]"
 
 
 def main():

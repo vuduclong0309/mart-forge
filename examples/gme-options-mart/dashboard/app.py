@@ -103,11 +103,19 @@ def dqc_badge(scorecard: dict | None) -> str:
     if not scorecard:
         return ":gray[DQC: unknown]"
     statuses = [c["status"] for c in scorecard.get("controls", [])]
+    if not statuses:
+        return ":gray[DQC: UNKNOWN]"
     if any(s == "fail" for s in statuses):
         return ":red[DQC: FAIL]"
     if any(s == "unavailable" for s in statuses):
         return ":orange[DQC: PARTIAL]"
-    return ":green[DQC: PASS]"
+    if any(s in ("exhausted", "waived") for s in statuses):
+        return ":orange[DQC: PASS WITH WAIVERS]"
+    if any(s == "pending" for s in statuses):
+        return ":orange[DQC: PENDING]"
+    if all(s == "pass" for s in statuses):
+        return ":green[DQC: PASS]"
+    return ":gray[DQC: UNKNOWN]"
 
 
 def main():

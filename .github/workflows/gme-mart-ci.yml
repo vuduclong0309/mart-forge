@@ -54,6 +54,34 @@ jobs:
         run: |
           dbt test --profiles-dir . --vars '{"use_fixture": false}'
 
+      - name: Save committed scorecard for freshness check
+        if: always() && (steps.dbt-test.outcome == 'success' || steps.dbt-test.outcome == 'failure' || steps.dbt-test-live.outcome == 'success' || steps.dbt-test-live.outcome == 'failure')
+        run: cp dqc_scorecard.json dqc_scorecard_committed.json
+
       - name: Update DQC scorecard from test results
         if: always() && (steps.dbt-test.outcome == 'success' || steps.dbt-test.outcome == 'failure' || steps.dbt-test-live.outcome == 'success' || steps.dbt-test-live.outcome == 'failure')
         run: python ../../scripts/dqc_update.py --run-results target/run_results.json --scorecard dqc_scorecard.json
+
+      - name: Verify committed scorecard is fresh
+        if: always() && (steps.dbt-test.outcome == 'success' || steps.dbt-test.outcome == 'failure' || steps.dbt-test-live.outcome == 'success' || steps.dbt-test-live.outcome == 'failure')
+        run: |
+          python -c "
+          import json, sys
+
+          def strip_volatile(sc):
+              sc = dict(sc)
+              sc.pop('generated_at', None)
+              for c in sc.get('controls', []):
+                  c.pop('verified_at', None)
+                  c.pop('last_dbt_run', None)
+              return sc
+
+          committed = strip_volatile(json.load(open('dqc_scorecard_committed.json')))
+          fresh = strip_volatile(json.load(open('dqc_scorecard.json')))
+
+          if committed != fresh:
+              print('ERROR: Committed dqc_scorecard.json is stale.', file=sys.stderr)
+              print('Re-run dbt test + dqc_update.py and commit the updated scorecard.', file=sys.stderr)
+              sys.exit(1)
+          print('OK: Committed scorecard matches current test results.')
+          "
