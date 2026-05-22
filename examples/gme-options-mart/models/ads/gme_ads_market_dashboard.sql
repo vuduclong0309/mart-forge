@@ -10,6 +10,11 @@ metrics AS (
     FROM {{ ref('gme_dws_options_metrics_1d') }}
 ),
 
+sentiment AS (
+    SELECT pull_date, ticker, social_mention_count, social_sentiment_score
+    FROM {{ ref('gme_dws_social_sentiment_1d') }}
+),
+
 date_dim AS (
     SELECT full_date, year, quarter, month_name, day_name, is_trading_day
     FROM {{ ref('gme_dim_date') }}
@@ -41,10 +46,15 @@ SELECT
     m.iv_rank,
     m.oi_daily_delta,
     m.dealer_net_gamma,
-    m.iv_percentile
+    m.iv_percentile,
+
+    ss.social_mention_count,
+    ss.social_sentiment_score
 
 FROM snapshot sn
 LEFT JOIN metrics m
     ON sn.pull_date = m.pull_date AND sn.ticker = m.ticker
+LEFT JOIN sentiment ss
+    ON sn.pull_date = ss.pull_date AND sn.ticker = ss.ticker
 LEFT JOIN date_dim d
     ON sn.pull_date = d.full_date

@@ -1,0 +1,9 @@
+observed_date,ticker,source,mention_count,sentiment_score,source_url
+2026-05-13,GME,social_aggregate,1245,0.32,https://finance.yahoo.com/quote/GME/community
+2026-05-14,GME,social_aggregate,1089,-0.15,https://finance.yahoo.com/quote/GME/community
+2026-05-15,GME,social_aggregate,2340,0.58,https://finance.yahoo.com/quote/GME/community
+2026-05-16,GME,social_aggregate,1567,0.21,https://finance.yahoo.com/quote/GME/community
+2026-05-19,GME,social_aggregate,1890,0.45,https://finance.yahoo.com/quote/GME/community
+2026-05-20,GME,social_aggregate,2100,0.67,https://finance.yahoo.com/quote/GME/community
+2026-05-21,GME,social_aggregate,1432,-0.08,https://finance.yahoo.com/quote/GME/community
+2026-05-22,GME,social_aggregate,1678,0.39,https://finance.yahoo.com/quote/GME/community

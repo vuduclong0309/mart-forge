@@ -32,6 +32,12 @@ METRIC_CARDS = [
         "verify_url": "https://swaggystocks.com/dashboard/options-max-pain/GME",
     },
     {
+        "label": "Max Pain Convergence",
+        "column": "max_pain_convergence_pct",
+        "fmt": "{:.2f}%",
+        "verify_url": "https://swaggystocks.com/dashboard/options-max-pain/GME",
+    },
+    {
         "label": "P/C Ratio",
         "column": "pc_ratio",
         "fmt": "{:.3f}",
@@ -90,6 +96,21 @@ PHASE1_CARDS = [
     },
 ]
 
+SENTIMENT_CARDS = [
+    {
+        "label": "Social Mentions",
+        "column": "social_mention_count",
+        "fmt": "{:,.0f}",
+        "verify_url": "https://finance.yahoo.com/quote/GME/community",
+    },
+    {
+        "label": "Social Sentiment",
+        "column": "social_sentiment_score",
+        "fmt": "{:+.4f}",
+        "verify_url": "https://finance.yahoo.com/quote/GME/community",
+    },
+]
+
 st.set_page_config(page_title="GME Options Dashboard", layout="wide")
 
 
@@ -115,6 +136,8 @@ _LATEST_COLUMNS = ", ".join([
     "oi_daily_delta",
     "dealer_net_gamma",
     "iv_percentile",
+    "social_mention_count",
+    "social_sentiment_score",
 ])
 
 
@@ -204,12 +227,18 @@ def main():
 
     st.divider()
 
+    st.subheader("Social Sentiment")
+    render_cards(SENTIMENT_CARDS, row)
+
+    st.divider()
+
     st.subheader("Top OI Strikes")
     oi_cols = st.columns(3)
     for i, col_name in enumerate(["top_oi_strike_1", "top_oi_strike_2", "top_oi_strike_3"]):
         with oi_cols[i]:
             val = row.get(col_name)
             st.metric(f"#{i+1}", f"${val:,.0f}" if val is not None else "N/A")
+            st.caption("[Fact-check ↗](https://www.barchart.com/stocks/quotes/GME/options-overview)")
 
     history = load_history()
     if not history.empty and len(history) > 1:

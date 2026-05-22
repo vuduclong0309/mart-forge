@@ -185,6 +185,29 @@ models:
           Uses observation count, not calendar days.
           NULL when fewer than 20 sessions of iv30 history available.
 
+  - name: gme_dws_social_sentiment_1d
+    description: >
+      Daily social sentiment aggregates from seed fixture.
+      Grain: one row per ticker per day.
+      Fixture-backed for CI; live fetch is optional when credentials are present.
+    columns:
+      - name: pull_date
+        data_tests:
+          - not_null
+          - unique
+      - name: ticker
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["GME"]
+      - name: social_mention_count
+        description: "Total social mentions for the ticker on this day."
+        data_tests:
+          - not_null
+      - name: social_sentiment_score
+        description: "Mention-weighted average sentiment score (-1 to 1)."
+
   # --- ADS Layer ---
   - name: gme_ads_market_dashboard
     description: >
@@ -196,8 +219,9 @@ models:
           - not_null
           - unique
           - relationships:
-              to: ref('gme_dim_date')
-              field: full_date
+              arguments:
+                to: ref('gme_dim_date')
+                field: full_date
       - name: spot
         data_tests:
           - not_null
@@ -216,3 +240,7 @@ models:
         description: "Total dealer gamma exposure."
         data_tests:
           - not_null
+      - name: social_mention_count
+        description: "Total social mentions from seed fixture (NULL when no sentiment data for the day)."
+      - name: social_sentiment_score
+        description: "Mention-weighted average sentiment score (-1 to 1). NULL when no sentiment data for the day."
