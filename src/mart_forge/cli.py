@@ -75,11 +75,11 @@ def _find_templates_dir() -> Path:
     )
 
 
-def _doc_has_approval(path: Path) -> bool:
-    """Return True if ALL sign-off rows in the document have approved status."""
+def _parse_signoff_rows(path: Path) -> list[str]:
+    """Return the list of sign-off status values found in *path*."""
     _STATUSES = {"pending", "approved", "approved-with-conditions", "rejected"}
     content = path.read_text()
-    sign_off_rows: list[str] = []
+    rows: list[str] = []
     for line in content.splitlines():
         cells = [c.strip() for c in line.split("|")]
         cells = [c for c in cells if c]
@@ -87,10 +87,16 @@ def _doc_has_approval(path: Path) -> bool:
             continue
         status = cells[-1].lower()
         if status in _STATUSES:
-            sign_off_rows.append(status)
-    if not sign_off_rows:
+            rows.append(status)
+    return rows
+
+
+def _doc_has_approval(path: Path) -> bool:
+    """Return True if at least 1 sign-off row exists and ALL are approved."""
+    rows = _parse_signoff_rows(path)
+    if not rows:
         return False
-    return all(s in ("approved", "approved-with-conditions") for s in sign_off_rows)
+    return all(s in ("approved", "approved-with-conditions") for s in rows)
 
 
 def _require_approved(path: Path, doc_label: str, next_phase: str) -> None:
@@ -100,9 +106,15 @@ def _require_approved(path: Path, doc_label: str, next_phase: str) -> None:
             f"{doc_label} not found ({path.name}). "
             f"Complete the previous phase before {next_phase}."
         )
-    if not _doc_has_approval(path):
+    rows = _parse_signoff_rows(path)
+    if not rows:
         raise click.ClickException(
-            f"{doc_label} ({path.name}) has no approved sign-off. "
+            f"{doc_label} ({path.name}) has no sign-off rows. "
+            f"Add a Sign-Off section with at least one pending row before {next_phase}."
+        )
+    if not all(s in ("approved", "approved-with-conditions") for s in rows):
+        raise click.ClickException(
+            f"{doc_label} ({path.name}) has unapproved sign-off rows. "
             f"Get sign-off before proceeding to {next_phase}."
         )
 
