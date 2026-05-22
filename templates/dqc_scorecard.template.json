@@ -1,0 +1,78 @@
+{
+  "mart": "",
+  "generated_at": "",
+  "controls": [
+    {
+      "class": "pk_integrity",
+      "description": "Primary keys are not null and unique across all models.",
+      "status": "pending",
+      "linked_dbt_tests": [],
+      "last_dbt_run": null,
+      "verified_at": null,
+      "attempts": []
+    },
+    {
+      "class": "fk_integrity",
+      "description": "Foreign key relationships are valid across model joins.",
+      "status": "pending",
+      "linked_dbt_tests": [],
+      "last_dbt_run": null,
+      "verified_at": null,
+      "attempts": []
+    },
+    {
+      "class": "freshness",
+      "description": "Source data is within acceptable staleness thresholds.",
+      "status": "pending",
+      "linked_dbt_tests": [],
+      "last_dbt_run": null,
+      "verified_at": null,
+      "attempts": []
+    },
+    {
+      "class": "completeness_volume",
+      "description": "Row counts and completeness meet expected volume thresholds.",
+      "status": "pending",
+      "linked_dbt_tests": [],
+      "last_dbt_run": null,
+      "verified_at": null,
+      "attempts": []
+    },
+    {
+      "class": "accepted_ranges",
+      "description": "Column values fall within accepted ranges and value sets.",
+      "status": "pending",
+      "linked_dbt_tests": [],
+      "last_dbt_run": null,
+      "verified_at": null,
+      "attempts": []
+    },
+    {
+      "class": "duplicate_detection",
+      "description": "No unexpected duplicate rows exist in output models.",
+      "status": "pending",
+      "linked_dbt_tests": [],
+      "last_dbt_run": null,
+      "verified_at": null,
+      "attempts": []
+    },
+    {
+      "class": "null_rate_threshold",
+      "description": "Null rates for key columns are within acceptable limits.",
+      "status": "pending",
+      "linked_dbt_tests": [],
+      "last_dbt_run": null,
+      "verified_at": null,
+      "attempts": []
+    },
+    {
+      "class": "business_reconciliation",
+      "description": "Mart outputs reconcile against authoritative business figures.",
+      "status": "pending",
+      "linked_dbt_tests": [],
+      "last_dbt_run": null,
+      "verified_at": null,
+      "attempts": []
+    }
+  ]
+}
