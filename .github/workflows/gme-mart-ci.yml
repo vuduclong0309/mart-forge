@@ -40,13 +40,13 @@ jobs:
         run: dbt run --profiles-dir . --vars '{"use_fixture": ${{ env.USE_FIXTURE }}}'
 
       - name: dbt test
+        id: dbt-test
         run: dbt test --profiles-dir . --vars '{"use_fixture": ${{ env.USE_FIXTURE }}}'
 
       - name: Update DQC scorecard from test results
-        run: python ../../scripts/dqc_update.py --run-results target/run_results.json --scorecard dqc_scorecard.json
-
-      - name: Update DQC scorecard from test results
+        if: always() && steps.dbt-test.outcome != 'skipped'
         run: python ../../scripts/dqc_update.py --run-results target/run_results.json --scorecard dqc_scorecard.json
 
       - name: Verify DQC scorecard exists
-        run: test -f dqc_scorecard.json && echo "DQC scorecard present"
+        if: always() && steps.dbt-test.outcome != 'skipped'
+        run: test -f dqc_scorecard.json && cat dqc_scorecard.json | python -c "import sys,json; d=json.load(sys.stdin); print(f'DQC scorecard: {sum(1 for c in d[\"controls\"] if c[\"status\"] in (\"pass\",\"exhausted\"))}/{len(d[\"controls\"])} controls passing')"
