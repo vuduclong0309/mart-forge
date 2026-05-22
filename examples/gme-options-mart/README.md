@@ -69,6 +69,26 @@ gme_ads_market_dashboard         X
 | Max pain | Strike minimizing total exercise value across all contracts | DWS |
 | P/C ratio | Put OI / Call OI | DWS |
 
+## OpenBB Provider Probe
+
+OpenBB Platform is registered as a reconciliation provider for independent GEX cross-verification. A probe script tests each OpenBB provider for GME options chain data:
+
+```bash
+pip install 'openbb>=4.5'
+python scripts/openbb_gex_probe.py --pretty
+```
+
+Providers attempted (OpenBB 4.7.1, 2026-05-22):
+
+| Provider | Result | Reason |
+|----------|--------|--------|
+| `cboe` | not independent | Same cdn.cboe.com endpoint as primary ODS — not a separate source |
+| `yfinance` | insufficient fields | Returns 905 contracts but **no gamma column** — GEX not computable |
+| `intrinio` | credentials required | Paid API key needed |
+| `tradier` | not available | Not supported for `options.chains` in OpenBB 4.7.1 |
+
+If a future OpenBB provider or yfinance update adds gamma to the response, re-run the probe to upgrade business reconciliation from proxy to direct.
+
 ## DQC Control Catalog
 
 All 8 control classes implemented:
@@ -82,6 +102,6 @@ All 8 control classes implemented:
 | Accepted Ranges | Positive strikes, non-negative OI, plausible P/C ratio | pass |
 | Duplicate Detection | Singular test on `(pull_date, option_symbol)` grain | pass |
 | Null-Rate Threshold | Greeks null rate < 5% in DWD | pass |
-| Business Reconciliation | GEX vs external source — **unavailable** (paywalled, waiver granted) | unavailable |
+| Business Reconciliation | GEX vs external — OpenBB probed, no free gamma source; proxy in place | exhausted |
 
-See `dqc_scorecard.json` for the machine-readable scorecard. The dashboard displays a DQC status badge derived from this file.
+See `dqc_scorecard.json` for the machine-readable scorecard with full `attempts[]` evidence. The dashboard displays a DQC status badge derived from this file.

@@ -148,7 +148,7 @@
     },
     {
       "class": "business_reconciliation",
-      "description": "GEX reconciliation against external source. All free sources exhausted \u2014 proxy reconciliation in place.",
+      "description": "GEX reconciliation against external source. OpenBB providers probed (cboe, yfinance, intrinio, tradier) \u2014 no free provider returns gamma for independent GEX computation. Proxy reconciliation in place.",
       "metrics": [
         {
           "metric": "gex_total",
@@ -158,43 +158,64 @@
         }
       ],
       "status": "exhausted",
-      "verified_at": "2026-05-22T00:00:00Z",
+      "verified_at": "2026-05-22T18:13:39Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_reconciliation"
       ],
       "last_dbt_run": "2026-05-22T02:23:56.247763Z",
       "attempts": [
         {
-          "source": "CBOE delayed quotes API (cdn.cboe.com)",
+          "source": "OpenBB cboe provider (obb.derivatives.options.chains, provider='cboe')",
+          "result": "not_independent",
+          "reason": "OpenBB cboe provider fetches from the same cdn.cboe.com endpoint used by the primary ODS ingest. It is not an independent reconciliation source. Per-contract greeks are already ingested; CBOE publishes no pre-computed GEX aggregate.",
+          "date": "2026-05-22",
+          "evidence_uri": "examples/gme-options-mart/scripts/openbb_gex_probe.py"
+        },
+        {
+          "source": "OpenBB yfinance provider (obb.derivatives.options.chains, provider='yfinance')",
+          "result": "insufficient_fields",
+          "reason": "yfinance returns 905 contracts with open_interest, underlying_price, strike, implied_volatility, option_type \u2014 but no gamma column. Without gamma, GEX cannot be computed. OpenBB v4.7.1, openbb-yfinance v1.6.2.",
+          "date": "2026-05-22",
+          "evidence_uri": "examples/gme-options-mart/scripts/openbb_gex_probe.py"
+        },
+        {
+          "source": "OpenBB intrinio provider (obb.derivatives.options.chains, provider='intrinio')",
+          "result": "credentials_required",
+          "reason": "Intrinio requires a paid API key (intrinio_api_key). No free tier available for options chain data with greeks.",
+          "date": "2026-05-22",
+          "evidence_uri": "https://docs.openbb.co/platform/settings/user_settings/api_keys"
+        },
+        {
+          "source": "OpenBB tradier provider",
+          "result": "not_available",
+          "reason": "Tradier is not a supported provider for obb.derivatives.options.chains in OpenBB 4.7.1. Valid providers: cboe, intrinio, yfinance.",
+          "date": "2026-05-22",
+          "evidence_uri": "examples/gme-options-mart/scripts/openbb_gex_probe.py"
+        },
+        {
+          "source": "CBOE delayed quotes API (cdn.cboe.com) \u2014 direct",
           "result": "no_data",
-          "reason": "CBOE public endpoint provides per-contract data but no pre-computed GEX aggregate. Individual contract greeks are already ingested at ODS layer.",
+          "reason": "CBOE public endpoint provides per-contract greeks (already ingested at ODS layer) but no pre-computed GEX aggregate for reconciliation.",
           "date": "2026-05-18",
           "evidence_uri": "https://cdn.cboe.com/api/global/delayed_quotes/options/GME.json"
         },
         {
-          "source": "Yahoo Finance options chain",
-          "result": "no_data",
-          "reason": "Yahoo Finance provides options chains with greeks but does not publish a GEX total or net gamma exposure figure.",
-          "date": "2026-05-18",
-          "evidence_uri": "https://finance.yahoo.com/quote/GME/options/"
-        },
-        {
           "source": "Unusual Whales / Spotgamma / Squeezemetrics",
           "result": "paywalled",
-          "reason": "All three major GEX data providers require paid subscriptions (50-300 USD/mo). No free tier or trial API available for automated reconciliation.",
+          "reason": "All three major GEX data providers require paid subscriptions ($50-300/mo). No free tier or trial API available for automated reconciliation.",
           "date": "2026-05-19",
           "evidence_uri": "https://unusualwhales.com/pricing"
         },
         {
           "source": "ODS-to-DWD row count proxy reconciliation",
           "result": "pass",
-          "reason": "DWD rows never exceed ODS rows (filters applied in DWD are strictly reductive). Validates pipeline does not fabricate rows. Implemented as test_dqc_reconciliation.sql.",
+          "reason": "DWD rows never exceed ODS rows (DWD filters are strictly reductive). Validates pipeline does not fabricate rows. Implemented as test_dqc_reconciliation.sql.",
           "date": "2026-05-20",
           "evidence_uri": "examples/gme-options-mart/tests/test_dqc_reconciliation.sql"
         }
       ],
       "waiver_signed_by": "operator",
-      "waiver_date": "2026-05-21"
+      "waiver_date": "2026-05-22"
     }
   ]
 }
