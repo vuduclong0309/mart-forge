@@ -1,4 +1,4 @@
--- Phase-1 options metrics. Grain: one row per pull_date per ticker.
+-- Phase-1 options metrics. Grain: one row per pull_date (single-ticker GME).
 -- Metrics: gamma_flip_point, iv30, hv20, iv_rank, oi_daily_delta,
 --          dealer_net_gamma, iv_percentile.
 
@@ -43,7 +43,6 @@ gamma_flip_crossing AS (
     ) = 1
 ),
 
--- Fallback: nearest-to-zero cumulative strike when no crossing exists
 gamma_flip_fallback AS (
     SELECT pull_date, ticker, strike AS gamma_flip_point
     FROM cum_gex
@@ -101,9 +100,9 @@ oi_delta AS (
     FROM daily_oi
 ),
 
--- hv20: 20-trading-day historical volatility of underlying closes
--- Uses gme_underlying_closes seed (public fixture data)
--- Formula: STDDEV(ln(close/prev_close)) * SQRT(252), over 20-day window
+-- hv20: 20-return (21-close) historical volatility of underlying closes
+-- Uses gme_underlying_closes seed (Yahoo Finance chart API daily closes)
+-- Formula: STDDEV(ln(close/prev_close)) * SQRT(252), over 20 log-returns
 underlying_returns AS (
     SELECT
         uc.trade_date,
@@ -120,22 +119,30 @@ hv20_calc AS (
         trade_date,
         ticker,
         CASE
-            WHEN COUNT(log_return) OVER w >= 19
+            WHEN COUNT(log_return) OVER w >= 20
             THEN STDDEV(log_return) OVER w * SQRT(252)
         END                                                   AS hv20
     FROM underlying_returns
     WINDOW w AS (
         PARTITION BY ticker
         ORDER BY trade_date
-        ROWS BETWEEN 19 PRECEDING AND CURRENT ROW
+        ROWS BETWEEN 20 PRECEDING AND CURRENT ROW
     )
 ),
 
--- iv_rank and iv_percentile require a 252-trading-day history of iv30 values.
+-- iv_rank and iv_percentile use a 252-observation session window.
 -- With limited fixture history (single pull_date), these will be NULL.
--- When multi-day options data accumulates, the self-reference computes:
 --   iv_rank = (current_iv30 - min_iv30_252d) / (max_iv30_252d - min_iv30_252d)
---   iv_percentile = fraction of 252d window where iv30 < current iv30
+--   iv_percentile = fraction of 252-session window where iv30 < current iv30
+iv30_numbered AS (
+    SELECT
+        pull_date, ticker, iv30,
+        ROW_NUMBER() OVER (
+            PARTITION BY ticker ORDER BY pull_date
+        ) AS session_num
+    FROM iv30_calc
+),
+
 iv_history AS (
     SELECT
         i.pull_date,
@@ -145,10 +152,10 @@ iv_history AS (
         MAX(i2.iv30)                                          AS max_iv30_252d,
         COUNT(i2.iv30)                                        AS iv30_day_count,
         SUM(CASE WHEN i2.iv30 < i.iv30 THEN 1 ELSE 0 END)   AS days_below
-    FROM iv30_calc i
-    LEFT JOIN iv30_calc i2
+    FROM iv30_numbered i
+    LEFT JOIN iv30_numbered i2
         ON i.ticker = i2.ticker
-       AND i2.pull_date BETWEEN i.pull_date - INTERVAL '365' DAY AND i.pull_date
+       AND i2.session_num BETWEEN i.session_num - 251 AND i.session_num
     GROUP BY i.pull_date, i.ticker, i.iv30
 ),
 
@@ -192,8 +199,18 @@ LEFT JOIN gamma_flip gf
     ON pd.pull_date = gf.pull_date AND pd.ticker = gf.ticker
 LEFT JOIN iv30_calc iv
     ON pd.pull_date = iv.pull_date AND pd.ticker = iv.ticker
-LEFT JOIN hv20_calc hv
-    ON pd.pull_date = hv.trade_date AND pd.ticker = hv.ticker
+LEFT JOIN (
+    SELECT trade_date, ticker, hv20
+    FROM hv20_calc
+    WHERE hv20 IS NOT NULL
+) hv ON pd.ticker = hv.ticker
+    AND hv.trade_date = (
+        SELECT MAX(h2.trade_date)
+        FROM hv20_calc h2
+        WHERE h2.ticker = pd.ticker
+          AND h2.trade_date <= pd.pull_date
+          AND h2.hv20 IS NOT NULL
+    )
 LEFT JOIN iv_history ivh
     ON pd.pull_date = ivh.pull_date AND pd.ticker = ivh.ticker
 LEFT JOIN oi_delta oi

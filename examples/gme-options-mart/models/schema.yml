@@ -135,15 +135,22 @@ models:
     description: >
       Phase-1 options metrics: gamma_flip_point, iv30, hv20, iv_rank,
       oi_daily_delta, dealer_net_gamma, iv_percentile.
-      Grain: one row per pull_date per ticker.
-      iv_rank and iv_percentile require >=20 days of iv30 history;
-      NULL when insufficient data (documented fixture limitation).
-      oi_daily_delta is NULL on first observation (no prior day).
+      Grain: one row per pull_date for ticker GME (single-ticker public example).
+      iv_rank and iv_percentile use a 252-observation session window;
+      NULL when fewer than 20 sessions available (documented fixture limitation).
+      hv20 uses 20 log-returns (21 closes). oi_daily_delta is NULL on first observation.
     columns:
       - name: pull_date
         data_tests:
           - not_null
           - unique
+      - name: ticker
+        description: "Underlying ticker symbol. Single-ticker example: GME only."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["GME"]
       - name: gamma_flip_point
         description: >
           Strike where cumulative net GEX crosses zero (linear interpolation).
@@ -156,12 +163,14 @@ models:
           - not_null
       - name: hv20
         description: >
-          20-trading-day annualized historical volatility of underlying closes.
+          Annualized historical volatility from 20 log-returns (21 closes).
           Source: gme_underlying_closes seed (Yahoo Finance chart API daily closes).
+          Joined as latest available trade_date <= pull_date to tolerate seed lag.
       - name: iv_rank
         description: >
           (current_iv30 - min_iv30_252d) / (max_iv30_252d - min_iv30_252d).
-          NULL when fewer than 20 days of iv30 history available.
+          Uses 252-observation session window (not calendar days).
+          NULL when fewer than 20 sessions of iv30 history available.
       - name: oi_daily_delta
         description: >
           Change in total open interest vs previous pull_date.
@@ -172,8 +181,9 @@ models:
           - not_null
       - name: iv_percentile
         description: >
-          Fraction of 252-day window where iv30 was below current iv30.
-          NULL when fewer than 20 days of iv30 history available.
+          Fraction of 252-session window where iv30 was below current iv30.
+          Uses observation count, not calendar days.
+          NULL when fewer than 20 sessions of iv30 history available.
 
   # --- ADS Layer ---
   - name: gme_ads_market_dashboard
