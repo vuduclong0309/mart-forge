@@ -42,8 +42,11 @@ def get_db():
 @st.cache_data(ttl=300)
 def load_latest():
     db = get_db()
+    columns = ", ".join(
+        ["pull_date"] + [card["column"] for card in METRIC_CARDS]
+    )
     return db.sql(
-        f"SELECT * FROM {ADS_TABLE} ORDER BY pull_date DESC LIMIT 1"
+        f"SELECT {columns} FROM {ADS_TABLE} ORDER BY pull_date DESC LIMIT 1"
     ).fetchdf()
 
 
