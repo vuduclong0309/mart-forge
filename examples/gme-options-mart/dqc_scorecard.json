@@ -1,6 +1,6 @@
 {
   "mart": "gme-options-mart",
-  "generated_at": "2026-05-22T18:59:37Z",
+  "generated_at": "2026-05-22T19:11:51Z",
   "controls": [
     {
       "class": "pk_integrity",
@@ -12,7 +12,7 @@
         "gme_ads_market_dashboard"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:59:37Z",
+      "verified_at": "2026-05-22T19:11:51Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.not_null_gme_ads_market_dashboard_dealer_net_gamma.95562269f2",
         "test.gme_options_mart.not_null_gme_ads_market_dashboard_gamma_flip_point.abd44ef757",
@@ -39,6 +39,9 @@
         "test.gme_options_mart.not_null_gme_dws_options_metrics_1d_iv30.b40901e88d",
         "test.gme_options_mart.not_null_gme_dws_options_metrics_1d_pull_date.855acdf504",
         "test.gme_options_mart.not_null_gme_dws_options_metrics_1d_ticker.4fcb1c1d68",
+        "test.gme_options_mart.not_null_gme_dws_social_sentiment_1d_pull_date.872b9e74b1",
+        "test.gme_options_mart.not_null_gme_dws_social_sentiment_1d_social_mention_count.1de3372ec6",
+        "test.gme_options_mart.not_null_gme_dws_social_sentiment_1d_ticker.2057945632",
         "test.gme_options_mart.not_null_gme_dws_strike_gex_1d_gex_rank.09b95f1273",
         "test.gme_options_mart.not_null_gme_dws_strike_gex_1d_net_gex.050486946e",
         "test.gme_options_mart.not_null_gme_dws_strike_gex_1d_pull_date.5e9a3ab62f",
@@ -55,9 +58,10 @@
         "test.gme_options_mart.unique_gme_dim_date_date_key.1606c1e38d",
         "test.gme_options_mart.unique_gme_dim_date_full_date.a6db16c72f",
         "test.gme_options_mart.unique_gme_dws_daily_snapshot_1d_pull_date.f85b6c2641",
-        "test.gme_options_mart.unique_gme_dws_options_metrics_1d_pull_date.6791f82288"
+        "test.gme_options_mart.unique_gme_dws_options_metrics_1d_pull_date.6791f82288",
+        "test.gme_options_mart.unique_gme_dws_social_sentiment_1d_pull_date.dba1e6a555"
       ],
-      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
+      "last_dbt_run": "2026-05-22T19:11:41.645204Z",
       "attempts": []
     },
     {
@@ -70,11 +74,11 @@
         "pull_date -> gme_dim_date.full_date"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:59:37Z",
+      "verified_at": "2026-05-22T19:11:51Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.relationships_gme_ads_market_dashboard_pull_date__full_date__ref_gme_dim_date_.c8f69bb9b8"
       ],
-      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
+      "last_dbt_run": "2026-05-22T19:11:41.645204Z",
       "attempts": []
     },
     {
@@ -84,11 +88,11 @@
         "gme_ods_cboe_options_chain"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:59:37Z",
+      "verified_at": "2026-05-22T19:11:51Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_freshness"
       ],
-      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
+      "last_dbt_run": "2026-05-22T19:11:41.645204Z",
       "attempts": []
     },
     {
@@ -102,11 +106,11 @@
         "gme_dws_options_metrics_1d"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:59:37Z",
+      "verified_at": "2026-05-22T19:11:51Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_completeness"
       ],
-      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
+      "last_dbt_run": "2026-05-22T19:11:41.645204Z",
       "attempts": []
     },
     {
@@ -118,17 +122,18 @@
         "gme_dws_options_metrics_1d"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:59:37Z",
+      "verified_at": "2026-05-22T19:11:51Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.accepted_values_gme_dwd_option_contract_di_option_type__call__put.bb067ff468",
         "test.gme_options_mart.accepted_values_gme_dwd_option_contract_di_series_type__WEEKLY__MONTHLY__LEAP.8c855bd6c2",
         "test.gme_options_mart.accepted_values_gme_dws_options_metrics_1d_ticker__GME.8f1f9e3005",
+        "test.gme_options_mart.accepted_values_gme_dws_social_sentiment_1d_ticker__GME.3c2ed3bb6f",
         "test.gme_options_mart.accepted_values_gme_ods_cboe_options_chain_option_type__call__put.9b0248d0fb",
         "test.gme_options_mart.accepted_values_gme_ods_cboe_options_chain_provider__cboe.3f502d09eb",
         "test.gme_options_mart.accepted_values_gme_ods_cboe_options_chain_ticker__GME.56d8a70262",
         "test.gme_options_mart.test_dqc_accepted_ranges"
       ],
-      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
+      "last_dbt_run": "2026-05-22T19:11:41.645204Z",
       "attempts": []
     },
     {
@@ -138,11 +143,11 @@
         "gme_dwd_option_contract_di"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:59:37Z",
+      "verified_at": "2026-05-22T19:11:51Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_duplicate_detection"
       ],
-      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
+      "last_dbt_run": "2026-05-22T19:11:41.645204Z",
       "attempts": []
     },
     {
@@ -152,11 +157,11 @@
         "gme_dwd_option_contract_di"
       ],
       "status": "pass",
-      "verified_at": "2026-05-22T18:59:37Z",
+      "verified_at": "2026-05-22T19:11:51Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_null_rate"
       ],
-      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
+      "last_dbt_run": "2026-05-22T19:11:41.645204Z",
       "attempts": []
     },
     {
@@ -175,7 +180,7 @@
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_reconciliation"
       ],
-      "last_dbt_run": "2026-05-22T18:59:32.126263Z",
+      "last_dbt_run": "2026-05-22T19:11:41.645204Z",
       "attempts": [
         {
           "source": "OpenBB cboe provider (obb.derivatives.options.chains, provider='cboe')",
@@ -251,6 +256,27 @@
           "reason": "DWD rows never exceed ODS rows (DWD filters are strictly reductive). Validates pipeline does not fabricate rows. Implemented as test_dqc_reconciliation.sql.",
           "date": "2026-05-20",
           "evidence_uri": "examples/gme-options-mart/tests/test_dqc_reconciliation.sql"
+        },
+        {
+          "source": "Reddit MCP / Claude plugin surface",
+          "result": "not_available",
+          "reason": "No Reddit MCP or Reddit skill found in Claude Code or Codex tool surfaces. No live Reddit access available for automated sentiment verification.",
+          "date": "2026-05-23",
+          "command": "grep -r reddit ~/.claude/plugins/ 2>/dev/null"
+        },
+        {
+          "source": "praw (Python Reddit API Wrapper)",
+          "result": "not_installed",
+          "reason": "praw is not installed in any available Python environment (system Python 3.14, conda base Python 3.12). No Reddit env vars (REDDIT_CLIENT_ID, REDDIT_SECRET) found.",
+          "date": "2026-05-23",
+          "command": "python3 -c 'import praw' → ModuleNotFoundError; pip show praw → not found; env | grep -i REDDIT → empty"
+        },
+        {
+          "source": "Social sentiment seed fixture (deterministic CI fallback)",
+          "result": "pass",
+          "reason": "Fixture-backed gme_social_sentiment seed provides 8 deterministic rows for CI. Social sentiment is classified as plausibility/advisory per DaPES WIKI — not authoritative DQC pass/fail for GEX. Live Reddit fetch is optional when credentials are present.",
+          "date": "2026-05-23",
+          "evidence_uri": "examples/gme-options-mart/seeds/gme_social_sentiment.csv"
         }
       ],
       "waiver_signed_by": "operator",

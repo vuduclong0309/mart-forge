@@ -21,10 +21,6 @@ vars:
   provider_retries: 3
   use_fixture: true
 
-  warrant_strike: 30.0
-  warrant_quantity: 100
-  warrant_expiry: '2026-12-18'
-
 seeds:
   gme_options_mart:
     +schema: raw
@@ -46,6 +42,14 @@ seeds:
         trade_date: date
         ticker: varchar
         close_price: double
+    gme_social_sentiment:
+      +column_types:
+        observed_date: date
+        ticker: varchar
+        source: varchar
+        mention_count: integer
+        sentiment_score: double
+        source_url: varchar
 
 models:
   gme_options_mart:
