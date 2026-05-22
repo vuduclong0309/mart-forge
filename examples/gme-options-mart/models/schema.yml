@@ -7,39 +7,39 @@ models:
     columns:
       - name: option_symbol
         description: "OCC option symbol (e.g. GME260620C00025000)"
-        tests:
+        data_tests:
           - not_null
       - name: pull_date
-        tests:
+        data_tests:
           - not_null
       - name: ticker
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               values: ["GME"]
       - name: provider
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               values: ["cboe"]
       - name: pull_ts_utc
-        tests:
+        data_tests:
           - not_null
       - name: quote_ts_utc
         description: "Source-side timestamp from CBOE delayed quotes feed"
-        tests:
+        data_tests:
           - not_null
       - name: run_id
         description: "Pipeline execution identifier for lineage tracing"
-        tests:
+        data_tests:
           - not_null
       - name: option_type
-        tests:
+        data_tests:
           - accepted_values:
               values: ["call", "put"]
       - name: strike
         description: "Option strike price. May be null for non-standard OCC symbols at ODS level — filtered in DWD."
-        tests:
+        data_tests:
           - not_null:
               config:
                 severity: warn
@@ -50,15 +50,15 @@ models:
     columns:
       - name: date_key
         description: "Surrogate key (YYYYMMDD integer)"
-        tests:
+        data_tests:
           - not_null
           - unique
       - name: full_date
-        tests:
+        data_tests:
           - not_null
           - unique
       - name: is_trading_day
-        tests:
+        data_tests:
           - not_null
 
   # --- DWD Layer ---
@@ -67,30 +67,30 @@ models:
     columns:
       - name: option_symbol
         description: "OCC symbol — unique within pull_date"
-        tests:
+        data_tests:
           - not_null
       - name: pull_date
-        tests:
+        data_tests:
           - not_null
       - name: strike
-        tests:
+        data_tests:
           - not_null
       - name: expiry
-        tests:
+        data_tests:
           - not_null
       - name: option_type
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               values: ["call", "put"]
       - name: open_interest
-        tests:
+        data_tests:
           - not_null
       - name: gex_contribution
-        tests:
+        data_tests:
           - not_null
       - name: series_type
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               values: ["WEEKLY", "MONTHLY", "LEAP"]
@@ -100,30 +100,30 @@ models:
     description: "Net GEX by strike, daily. Grain: one row per strike per expiry per day."
     columns:
       - name: pull_date
-        tests:
+        data_tests:
           - not_null
       - name: strike
-        tests:
+        data_tests:
           - not_null
       - name: net_gex
-        tests:
+        data_tests:
           - not_null
       - name: gex_rank
-        tests:
+        data_tests:
           - not_null
 
   - name: gme_dws_daily_snapshot_1d
     description: "Daily market summary: spot, GEX, max pain, P/C ratio, top OI strikes. Grain: one row per day."
     columns:
       - name: pull_date
-        tests:
+        data_tests:
           - not_null
           - unique
       - name: spot
-        tests:
+        data_tests:
           - not_null
       - name: pc_ratio
-        tests:
+        data_tests:
           - not_null
 
   # --- ADS Layer ---
@@ -131,12 +131,15 @@ models:
     description: "One-big-table combining daily snapshot with calendar attributes for dashboard consumption. Grain: one row per day."
     columns:
       - name: pull_date
-        tests:
+        data_tests:
           - not_null
           - unique
+          - relationships:
+              to: ref('gme_dim_date')
+              field: full_date
       - name: spot
-        tests:
+        data_tests:
           - not_null
       - name: ticker
-        tests:
+        data_tests:
           - not_null

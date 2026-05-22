@@ -76,17 +76,21 @@ def _find_templates_dir() -> Path:
 
 
 def _doc_has_approval(path: Path) -> bool:
-    """Return True if a markdown document has at least one approved sign-off row."""
+    """Return True if ALL sign-off rows in the document have approved status."""
+    _STATUSES = {"pending", "approved", "approved-with-conditions", "rejected"}
     content = path.read_text()
+    sign_off_rows: list[str] = []
     for line in content.splitlines():
         cells = [c.strip() for c in line.split("|")]
         cells = [c for c in cells if c]
         if len(cells) < 2:
             continue
         status = cells[-1].lower()
-        if status in ("approved", "approved-with-conditions"):
-            return True
-    return False
+        if status in _STATUSES:
+            sign_off_rows.append(status)
+    if not sign_off_rows:
+        return False
+    return all(s in ("approved", "approved-with-conditions") for s in sign_off_rows)
 
 
 def _require_approved(path: Path, doc_label: str, next_phase: str) -> None:
