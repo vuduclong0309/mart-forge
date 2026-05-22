@@ -192,12 +192,10 @@ def init(name: str, db_name: str | None, prefix: str | None) -> None:
     click.echo(f"  dbt_project.yml           — dbt config (profile: {profile})")
     click.echo(f"  profiles.yml              — local DuckDB connection")
     click.echo()
-    click.echo("Next steps:")
+    click.echo("Next step:")
     click.echo(f"  cd {name}")
     click.echo(f"  # Fill business-requirements.md and get operator sign-off")
-    click.echo(f"  mart-forge tdd --domain \"your data domain\"")
-    click.echo(f"  # Fill tech-design-doc.md and get reviewer sign-off")
-    click.echo(f"  mart-forge scaffold --domain \"your data domain\"")
+    click.echo(f"  # Then run: mart-forge tdd --domain \"your data domain\"")
 
 
 @main.command()

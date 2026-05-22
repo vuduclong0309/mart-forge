@@ -148,8 +148,8 @@ Both lines must be completed before Phase B (TDD) can begin. The `mart-brd` skil
 
 | Role | Name | Date | Status |
 |------|------|------|--------|
-| Operator (data owner) | {{ sign_off.operator.name }} | {{ sign_off.operator.date }} | pending / approved / approved-with-conditions / rejected |
-| Consumer (primary user) | {{ sign_off.consumer.name }} | {{ sign_off.consumer.date }} | pending / approved / approved-with-conditions / rejected |
+| Operator (data owner) | {{ sign_off.operator.name }} | {{ sign_off.operator.date }} | pending |
+| Consumer (primary user) | {{ sign_off.consumer.name }} | {{ sign_off.consumer.date }} | pending |
 
 **Solo-operator exception:** If the operator is also the sole consumer, they may self-sign both lines. Document the reason:
 

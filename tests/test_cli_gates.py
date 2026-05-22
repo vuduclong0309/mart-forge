@@ -1,0 +1,164 @@
+"""Integration tests for BRD/TDD phase gates in the mart-forge CLI."""
+
+from __future__ import annotations
+
+import os
+import textwrap
+from pathlib import Path
+
+import pytest
+from click.testing import CliRunner
+
+from mart_forge.cli import main
+
+
+@pytest.fixture()
+def runner():
+    return CliRunner()
+
+
+@pytest.fixture()
+def project_dir(tmp_path, runner):
+    """Run `mart-forge init` inside a temp dir and return the project path."""
+    os.chdir(tmp_path)
+    result = runner.invoke(main, ["init", "mymart"])
+    assert result.exit_code == 0, result.output
+    proj = tmp_path / "mymart"
+    os.chdir(proj)
+    return proj
+
+
+APPROVED_BRD_SIGNOFF = textwrap.dedent("""\
+    ## 7. Sign-Off
+
+    | Role | Name | Date | Status |
+    |------|------|------|--------|
+    | Operator (data owner) | Alice | 2026-01-01 | approved |
+    | Consumer (primary user) | Bob | 2026-01-01 | approved |
+""")
+
+PENDING_BRD_SIGNOFF = textwrap.dedent("""\
+    ## 7. Sign-Off
+
+    | Role | Name | Date | Status |
+    |------|------|------|--------|
+    | Operator (data owner) | Alice | 2026-01-01 | pending |
+    | Consumer (primary user) | Bob | 2026-01-01 | pending |
+""")
+
+APPROVED_TDD_SIGNOFF = textwrap.dedent("""\
+    ## Sign-Off
+
+    | Role | Name | Date | Status |
+    |------|------|------|--------|
+    | Tech lead / designer | Charlie | 2026-01-01 | approved |
+    | Reviewer | Dana | 2026-01-01 | approved |
+""")
+
+PENDING_TDD_SIGNOFF = textwrap.dedent("""\
+    ## Sign-Off
+
+    | Role | Name | Date | Status |
+    |------|------|------|--------|
+    | Tech lead / designer | Charlie | 2026-01-01 | pending |
+    | Reviewer | Dana | 2026-01-01 | pending |
+""")
+
+
+# ── init creates BRD with pending sign-off ─────────────────────────────────
+
+class TestInitCreatesBRD:
+    def test_init_creates_business_requirements(self, project_dir: Path):
+        brd = project_dir / "business-requirements.md"
+        assert brd.exists(), "init must create business-requirements.md"
+
+    def test_init_brd_has_pending_signoff(self, project_dir: Path):
+        brd = project_dir / "business-requirements.md"
+        content = brd.read_text()
+        assert "| pending |" in content, (
+            "BRD sign-off rows must default to 'pending'"
+        )
+
+    def test_init_message_says_fill_brd(self, tmp_path, runner):
+        os.chdir(tmp_path)
+        result = runner.invoke(main, ["init", "testmart"])
+        assert "Fill business-requirements.md and get operator sign-off" in result.output
+        assert "mart-forge scaffold" not in result.output, (
+            "init must not suggest running scaffold directly"
+        )
+
+
+# ── scaffold without BRD ────────────────────────────────────────────────────
+
+class TestScaffoldGateBRD:
+    def test_scaffold_fails_when_brd_missing(self, project_dir: Path, runner):
+        (project_dir / "business-requirements.md").unlink()
+        result = runner.invoke(main, ["scaffold", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+    def test_scaffold_fails_when_brd_unapproved(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text(PENDING_BRD_SIGNOFF)
+        result = runner.invoke(main, ["scaffold", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "no approved sign-off" in result.output
+
+
+# ── scaffold without TDD ────────────────────────────────────────────────────
+
+class TestScaffoldGateTDD:
+    def test_scaffold_fails_when_tdd_missing(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text(APPROVED_BRD_SIGNOFF)
+        result = runner.invoke(main, ["scaffold", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+    def test_scaffold_fails_when_tdd_unapproved(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text(APPROVED_BRD_SIGNOFF)
+        tdd = project_dir / "tech-design-doc.md"
+        tdd.write_text(PENDING_TDD_SIGNOFF)
+        result = runner.invoke(main, ["scaffold", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "no approved sign-off" in result.output
+
+
+# ── scaffold succeeds only with both approved ───────────────────────────────
+
+class TestScaffoldHappyPath:
+    def test_scaffold_succeeds_with_approved_brd_and_tdd(
+        self, project_dir: Path, runner
+    ):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text(APPROVED_BRD_SIGNOFF)
+        tdd = project_dir / "tech-design-doc.md"
+        tdd.write_text(APPROVED_TDD_SIGNOFF)
+        result = runner.invoke(main, ["scaffold", "--domain", "test"])
+        assert result.exit_code == 0, result.output
+        assert "Scaffolded" in result.output
+
+
+# ── tdd command gates on BRD ────────────────────────────────────────────────
+
+class TestTddGateBRD:
+    def test_tdd_fails_when_brd_missing(self, project_dir: Path, runner):
+        (project_dir / "business-requirements.md").unlink()
+        result = runner.invoke(main, ["tdd", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "not found" in result.output
+
+    def test_tdd_fails_when_brd_unapproved(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text(PENDING_BRD_SIGNOFF)
+        result = runner.invoke(main, ["tdd", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "no approved sign-off" in result.output
+
+    def test_tdd_succeeds_with_approved_brd(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text(APPROVED_BRD_SIGNOFF)
+        result = runner.invoke(main, ["tdd", "--domain", "test"])
+        assert result.exit_code == 0, result.output
+        assert (project_dir / "tech-design-doc.md").exists()
