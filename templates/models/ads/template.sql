@@ -20,16 +20,17 @@
 -- =====================================================================
 
 with primary_summary as (
-    -- Primary DWS model (e.g., daily revenue, daily metrics)
+    -- FIXME(select-star): replace * with the explicit columns your mart needs
     select * from {{ ref('{{ mart.prefix }}_dws_{{ primary_dws_model }}') }}
 ),
 
 secondary_summary as (
-    -- Secondary DWS model (e.g., customer lifetime, entity aggregations)
+    -- FIXME(select-star): replace * with the explicit columns your mart needs
     select * from {{ ref('{{ mart.prefix }}_dws_{{ secondary_dws_model }}') }}
 ),
 
 date_dim as (
+    -- FIXME(select-star): replace * with the explicit columns your mart needs
     select * from {{ ref('{{ mart.prefix }}_dim_date') }}
 ),
 
@@ -99,6 +100,7 @@ summary_stats as (
 -- =====================================================================
 
 select
+    -- FIXME(select-star): replace e.* with explicit enriched columns
     e.*,
     s.total_{{ entity_name_plural }},
     s.grand_total_{{ lifetime_measure }},

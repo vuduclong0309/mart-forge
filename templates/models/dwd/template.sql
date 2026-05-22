@@ -12,7 +12,8 @@
 --   - Use COALESCE(..., -1) for all FK columns (defaults to unknown member)
 --   - SCD Type 2 joins must include date-range predicates
 --   - No current_timestamp() in model logic (breaks idempotency)
---   - No SELECT * (explicit column list required)
+--   - No SELECT * from source/ref (explicit column list required);
+--     SELECT * from a final CTE with explicit columns is acceptable
 
 with facts as (
     select
@@ -91,4 +92,5 @@ joined as (
         on f.{{ fact_date_column }} = dt.full_date
 )
 
+-- OK: joined CTE has an explicit column list above; select * just forwards it
 select * from joined
