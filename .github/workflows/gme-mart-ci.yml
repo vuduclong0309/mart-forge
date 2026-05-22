@@ -22,7 +22,7 @@ jobs:
   dbt-pipeline:
     runs-on: ubuntu-latest
     env:
-      USE_FIXTURE: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.live_provider == 'true') }}
+      USE_FIXTURE: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.live_provider != 'true' }}
     steps:
       - uses: actions/checkout@v4
 
