@@ -21,7 +21,7 @@ Detects the current lifecycle phase of the user's project and routes to the corr
 ## Lifecycle Phases
 
 ```
-[A] BRD → [B] TDD → sign-off → [C] Scaffold → [D] DQC → [E] Presentation
+[A] BRD → approval → [B] TDD → approval → [C] Scaffold → [D] DQC → [E] Presentation
 ```
 
 ## Phase Detection
@@ -37,35 +37,47 @@ Run these checks in order. The first match determines the phase.
 **Artifacts to create:**
 - `mart.yml` populated with the user's domain, prefix, grain, providers, schedule, and DQC config
 
-### 2. mart.yml exists, no sign-off PRD
+### 2. mart.yml exists, no BRD (or BRD not approved)
 
-**Signal:** `mart.yml` exists but no `sign-off-prd.md` found (or sign-off PRD exists but sign-off lines are not `approved` / `approved-with-conditions`).
+**Signal:** `mart.yml` exists but no `business-requirements.md` found (or BRD exists but sign-off lines are not `approved` / `approved-with-conditions`).
 
-**Phase:** A/B — Business Requirements and Technical Design
+**Phase:** A — Business Requirements
 
-**Action:** Route to `mart-bootstrap` Phase A workflow:
-1. Validate mart.yml has all required keys
-2. Create directory structure
-3. Generate sign-off PRD from template
-4. STOP and tell the user to review and approve the sign-off PRD
+**Action:** Route to `mart-brd`:
+1. Gather client input (case study, data files, verbal description)
+2. Produce `business-requirements.md` from template
+3. STOP and tell the user to review and approve the BRD
 
-Tell the user: "Your mart config is ready but needs a signed-off design document before scaffolding can begin. Review `sign-off-prd.md` and set both sign-off lines to `approved` when ready."
+Tell the user: "Your mart config is ready but needs a Business Requirements Document before technical design can begin. Run `/mart-brd` to generate it, then set both sign-off lines to `approved` when ready."
 
-### 3. Sign-off approved, no models generated
+### 3. BRD approved, no TDD (or TDD not approved)
 
-**Signal:** `sign-off-prd.md` exists with both sign-off lines = `approved` or `approved-with-conditions`, but `models/` directory is empty or missing.
+**Signal:** `business-requirements.md` exists with both sign-off lines = `approved` or `approved-with-conditions`, but no `tech-design-doc.md` found (or TDD exists but sign-off lines are not approved).
+
+**Phase:** B — Technical Design
+
+**Action:** Route to `mart-tdd`:
+1. Read approved BRD and mart.yml
+2. Produce `tech-design-doc.md` with column-level specs (+ `sign-off-prd.md` as a generated summary)
+3. STOP and tell the user to review and approve the TDD
+
+Tell the user: "BRD is approved. Generate the Tech Design Document with `/mart-tdd`, then set both sign-off lines to `approved` when ready."
+
+### 4. BRD and TDD approved, no models generated
+
+**Signal:** Both `business-requirements.md` and `tech-design-doc.md` have approved sign-off lines, but `models/` directory is empty or missing.
 
 **Phase:** C — Scaffold
 
-**Action:** Route to `mart-bootstrap` Phase B workflow. This generates the full dbt project:
+**Action:** Route to `mart-bootstrap` scaffold workflow. This generates the full dbt project:
 - ODS, DIM, DWD, DWS, ADS models
 - schema.yml with DQC tests
 - Seeds, singular tests, dqc_scorecard.json
 - GitHub Actions workflow
 
-Tell the user: "Sign-off is confirmed. Scaffolding the mart now."
+Tell the user: "Both design documents are signed off. Scaffolding the mart now."
 
-### 4. Models exist, DQC incomplete
+### 5. Models exist, DQC incomplete
 
 **Signal:** Model `.sql` files exist under `models/`, but one or more of:
 - `dqc_scorecard.json` missing or has `fail`/`pending` entries
@@ -81,7 +93,7 @@ Tell the user: "Sign-off is confirmed. Scaffolding the mart now."
 
 Tell the user: "Your mart has models but DQC verification is incomplete. Running an audit to identify gaps."
 
-### 5. DQC passes, review needed
+### 6. DQC passes, review needed
 
 **Signal:** All 8 DQC control classes covered, `dqc_scorecard.json` shows all `pass`, but no `review_report.json` exists or the last review grade is below A.
 
@@ -94,7 +106,7 @@ Tell the user: "Your mart has models but DQC verification is incomplete. Running
 
 Tell the user: "DQC looks good. Running a production-readiness review to catch any remaining issues."
 
-### 6. Review passes (grade A)
+### 7. Review passes (grade A)
 
 **Signal:** `review_report.json` exists with grade = A.
 
@@ -104,7 +116,7 @@ Tell the user: "DQC looks good. Running a production-readiness review to catch a
 - "Your mart passed review with grade A. It's ready for production."
 - Offer optional next steps: dashboard generation, documentation polish, CI/CD setup verification
 
-### 7. Existing mart, schema change
+### 8. Existing mart, schema change
 
 **Signal:** User mentions a new column, source schema change, or field addition.
 

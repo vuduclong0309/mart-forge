@@ -4,7 +4,7 @@ Generate a Tech Design Document (TDD) with column-level calculation specs for a 
 
 ## What it does
 
-Reads an approved `sign-off-prd.md` and `mart.yml` to produce a TDD with:
+Reads an approved `business-requirements.md` (BRD) and `mart.yml` to produce a TDD with:
 - Kimball 4-step design reasoning (business process, grain, dimensions, facts)
 - Bus matrix cross-reference
 - Source-to-target mapping across all layers (ODS through ADS)
@@ -18,7 +18,7 @@ Reads an approved `sign-off-prd.md` and `mart.yml` to produce a TDD with:
 The TDD is the **Phase B gate** artifact. `mart-bootstrap` must not generate any model code until the TDD is signed off. This ensures every column has a specified calculation before code is written.
 
 Gate sequence:
-1. Phase A: `sign-off-prd.md` approved (business requirements)
+1. Phase A: `business-requirements.md` approved (BRD)
 2. **Phase B: `tech-design-doc.md` approved (physical design)**
 3. Code generation: `mart-bootstrap` scaffolds dbt models from the approved TDD
 
@@ -31,7 +31,7 @@ Gate sequence:
 ## Prerequisites
 
 - A valid `mart.yml` config file
-- An approved `sign-off-prd.md` (Phase A complete)
+- An approved `business-requirements.md` (Phase A complete)
 - Source system schema known (from provider docs or sample pull)
 
 ## References
@@ -40,4 +40,4 @@ Gate sequence:
 - Naming conventions: `docs/naming-conventions.md`
 - DQC control catalog: `docs/dqc-framework.md`
 - Bus matrix design: `docs/bus-matrix.md`
-- Reference example: `examples/gme-options-mart/sign-off-prd.md` (includes completed calc specs)
+- Reference example: `examples/gme-options-mart/business-requirements.md` (includes completed requirements)

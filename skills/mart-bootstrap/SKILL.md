@@ -27,41 +27,25 @@ Reads a `mart.yml` configuration file and generates a complete Kimball-layered d
 - **Provenance columns on every ODS** -- `provider`, `pull_ts_utc`, `quote_ts_utc`, `run_id` are non-negotiable.
 - **Unknown member row** -- every DIM must include a row ID = -1 with all attributes = 'Unknown', either via seed or model logic.
 
-## Phase A — Init & Sign-Off (runs first, STOP until sign-off is verified)
+## Lifecycle Gates (checked before scaffolding begins)
 
-Phase A creates the project skeleton and the sign-off PRD. **No models are generated until sign-off is complete.** The agent must STOP after Phase A and wait for the operator to fill and approve the sign-off PRD before proceeding to Phase B.
+This skill generates dbt models only after both design documents are approved. The full lifecycle:
 
-1. **Read mart.yml** -> verify: confirm all required keys exist (`mart.name`, `mart.prefix`, `mart.grain`, `providers`, `schedule`, `dqc`)
+1. `mart-forge init` → creates `mart.yml` + `business-requirements.md` template
+2. `/mart-brd` → operator fills the BRD; both sign-off lines must reach `approved` or `approved-with-conditions` (Phase A gate)
+3. `mart-forge tdd` (or `/mart-tdd`) → generates `tech-design-doc.md` (+ `sign-off-prd.md` as a summary); both TDD sign-off lines must reach `approved` or `approved-with-conditions` (Phase B gate)
+4. `/mart-bootstrap` (this skill) → scaffolds the dbt project only after **both** gates pass
 
-2. **Create directory structure** -> verify: all directories exist
-   ```
-   {mart_name}/
-   +-- models/
-   |   +-- ods/
-   |   +-- dim/
-   |   +-- dwd/
-   |   +-- dws/
-   |   +-- ads/
-   +-- seeds/
-   +-- tests/
-   +-- mart.yml
-   ```
+If either gate fails, STOP and inform the user which document is missing or unsigned. Route to `/mart-brd` if the BRD is missing/unapproved, or `/mart-tdd` if the TDD is missing/unapproved.
 
-3. **Copy sign-off PRD template** -> verify: file exists at `{mart_name}/sign-off-prd.md`
-   - Source: `templates/sign-off-prd.template.md`
-   - Replace `{{ mart.name }}`, `{{ mart.version }}`, `{{ mart.grain }}`, `{{ providers.primary }}`, `{{ schedule.cron }}`, and other mart.yml-resolvable placeholders with actual values from the config
-   - Leave human-input placeholders (personas, sensitivity classifications, sign-off names) as-is
+## Scaffold (only after both Phase A and Phase B gates pass)
 
-4. **STOP** -> inform the user that the sign-off PRD must be completed and approved before Phase B can begin. Both sign-off lines (operator + consumer) must have status `approved` or `approved-with-conditions`. Do not proceed until the user confirms sign-off.
+Before executing any step below, verify **both gates**:
 
-## Phase B — Generate Models (only after sign-off AND TDD are verified)
-
-Before executing any step in Phase B, verify **both gates**:
-
-1. **Phase A gate:** `{mart_name}/sign-off-prd.md` exists and both sign-off lines have status `approved` or `approved-with-conditions`
+1. **Phase A gate:** `{mart_name}/business-requirements.md` exists and both sign-off lines have status `approved` or `approved-with-conditions`
 2. **Phase B gate:** `{mart_name}/tech-design-doc.md` exists and both sign-off lines have status `approved` or `approved-with-conditions`
 
-If either gate fails, STOP and inform the user which document is missing or unsigned. Use `skills/mart-tdd/` to generate the TDD if Phase A is complete but Phase B is not.
+If either gate fails, STOP and inform the user which document is missing or unsigned.
 
 ## Workflow
 

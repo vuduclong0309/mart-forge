@@ -48,9 +48,9 @@ mart-forge focuses on a different part of the lifecycle: **designing and scaffol
 pip install mart-forge
 ```
 
-### Run the Live Example
+### Run the Example Mart
 
-The canonical example pulls live GME options data from CBOE:
+The canonical example mart uses a **fixture-backed data source** (a bundled Parquet snapshot) so it runs offline with no API keys or network access:
 
 ```bash
 cd examples/gme-options-mart
@@ -60,38 +60,70 @@ dbt run --profiles-dir .
 dbt test --profiles-dir .
 ```
 
-### Scaffold Your Own Mart
+> The fixture is controlled by `use_fixture: true` in `dbt_project.yml`. Set it to `false` to pull live delayed data from CBOE instead (requires network access).
 
-```bash
-# Initialize a new mart-forge project
-mart-forge init my-warehouse
+### Build Your Own Mart
 
-# Use an AI agent to scaffold a mart from a data domain description
-cd my-warehouse
-mart-forge scaffold --domain "your data domain" --template default
+mart-forge enforces a methodology-first lifecycle. You cannot scaffold models until the design documents are signed off:
 
-# Or run interactively with Claude Code
-claude --skill mart-forge
+```
+[A] BRD → approval → [B] TDD → approval → [C] Scaffold → [D] DQC → [E] Presentation
 ```
 
-### What Gets Scaffolded
+**Phase A — Business Requirements:**
 
-A `mart.yml` config produces a complete dbt project with Kimball 4-tier layers:
+```bash
+# 1. Create a mart.yml config for your data domain
+#    (see templates/mart.yml.template for the schema)
+
+# 2. Generate the Business Requirements Document (BRD)
+claude /mart-brd
+```
+
+Review `business-requirements.md`. Set both sign-off lines (operator + consumer) to `approved` before proceeding.
+
+**Phase B — Technical Design:**
+
+```bash
+# 3. Generate the Tech Design Document
+claude /mart-tdd
+```
+
+Review `tech-design-doc.md`. Set both sign-off lines (tech lead + reviewer) to `approved`.
+
+**Phase C — Scaffold:**
+
+```bash
+# 4. Generate all dbt models (only runs if both documents are signed off)
+claude /mart-bootstrap
+```
+
+Or let the framework detect your current phase automatically:
+
+```bash
+claude /using-mart-forge
+```
+
+### What Gets Generated
+
+The full lifecycle produces these artifacts:
 
 ```
 my-mart/
-├── mart.yml                  # Your domain config
-├── sign-off-prd.md           # Stakeholder sign-off document
+├── mart.yml                  # Domain config (you create this)
+├── business-requirements.md  # Phase A — BRD with metrics catalog + glossary
+├── sign-off-prd.md           # Generated summary (produced alongside TDD, not a Phase A gate)
+├── tech-design-doc.md        # Phase B — column-level specs + traceability matrix (must be approved)
 ├── models/
-│   ├── ods/                  # Operational Data Store — raw ingestion
-│   ├── dim/                  # Dimensions — conformed, SCD-aware
-│   ├── dwd/                  # Detail facts — atomic grain
-│   ├── dws/                  # Summary facts — aggregated
-│   └── ads/                  # Application Data Service — one-big-table
+│   ├── ods/                  # Operational Data Store — explicit column list, provenance columns
+│   ├── dim/                  # Dimensions — conformed, SCD-aware, unknown member row (sk=-1)
+│   ├── dwd/                  # Detail facts — atomic grain, FK joins via surrogate keys
+│   ├── dws/                  # Summary facts — window suffixes (_1d, _nd, _td, _mtd)
+│   └── ads/                  # Application Data Service — one-big-table denormalized
 ├── seeds/
 │   └── dim_date.csv          # Reference date dimension
-├── tests/                    # Grain enforcement + business logic
-├── dqc_scorecard.json        # Machine-readable quality gate
+├── tests/                    # Grain enforcement, freshness, completeness, null-rate, ranges
+├── dqc_scorecard.json        # Machine-readable quality gate (all 8 DQC control classes)
 └── .github/workflows/
     └── daily.yml             # CI/CD + scheduled refresh
 ```
