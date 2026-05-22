@@ -59,8 +59,10 @@ def load_latest():
     if COLUMN_OVERRIDE:
         cols = ", ".join(c.strip() for c in COLUMN_OVERRIDE.split(","))
     else:
-        # SELECT * is intentional: ADS column sets vary per mart, so the
-        # template cannot hard-code them.  Use --columns to restrict.
+        # FIXME(select-star): SELECT * is a template placeholder — users MUST
+        # replace it with an explicit column list for their mart, or pass
+        # --columns at runtime.  ADS column sets vary per mart, so the
+        # template cannot hard-code them.
         cols = "*"
     return db.sql(
         f"SELECT {cols} FROM {ADS_TABLE} ORDER BY pull_date DESC LIMIT 1"
