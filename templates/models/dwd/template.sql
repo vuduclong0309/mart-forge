@@ -91,4 +91,16 @@ joined as (
         on f.{{ fact_date_column }} = dt.full_date
 )
 
-select * from joined
+select
+    {{ fact_entity }}_sk,
+    {{ fact_business_key_1 }},
+    {{ fact_business_key_2 }},
+    {{ dimension_1_sk }},
+    {{ dimension_2_sk }},
+    {{ fact_date_column }}_key,
+    {{ fact_date_column }},
+    {{ measure_1 }},
+    {{ measure_2 }},
+    {{ measure_3 }},
+    {{ status_column }}
+from joined
