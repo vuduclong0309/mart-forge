@@ -41,6 +41,11 @@ seeds:
         is_weekend: boolean
         is_holiday: boolean
         is_trading_day: boolean
+    gme_underlying_closes:
+      +column_types:
+        trade_date: date
+        ticker: varchar
+        close_price: double
 
 models:
   gme_options_mart:

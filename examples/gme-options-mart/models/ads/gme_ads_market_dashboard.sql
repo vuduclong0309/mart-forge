@@ -4,6 +4,12 @@ WITH snapshot AS (
     FROM {{ ref('gme_dws_daily_snapshot_1d') }}
 ),
 
+metrics AS (
+    SELECT pull_date, ticker, gamma_flip_point, iv30, hv20, iv_rank,
+           oi_daily_delta, dealer_net_gamma, iv_percentile
+    FROM {{ ref('gme_dws_options_metrics_1d') }}
+),
+
 date_dim AS (
     SELECT full_date, year, quarter, month_name, day_name, is_trading_day
     FROM {{ ref('gme_dim_date') }}
@@ -27,8 +33,18 @@ SELECT
     sn.pc_ratio,
     sn.top_oi_strike_1,
     sn.top_oi_strike_2,
-    sn.top_oi_strike_3
+    sn.top_oi_strike_3,
+
+    m.gamma_flip_point,
+    m.iv30,
+    m.hv20,
+    m.iv_rank,
+    m.oi_daily_delta,
+    m.dealer_net_gamma,
+    m.iv_percentile
 
 FROM snapshot sn
+LEFT JOIN metrics m
+    ON sn.pull_date = m.pull_date AND sn.ticker = m.ticker
 LEFT JOIN date_dim d
     ON sn.pull_date = d.full_date

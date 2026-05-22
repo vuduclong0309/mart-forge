@@ -131,9 +131,65 @@ models:
         data_tests:
           - not_null
 
+  - name: gme_dws_options_metrics_1d
+    description: >
+      Phase-1 options metrics: gamma_flip_point, iv30, hv20, iv_rank,
+      oi_daily_delta, dealer_net_gamma, iv_percentile.
+      Grain: one row per pull_date for ticker GME (single-ticker public example).
+      iv_rank and iv_percentile use a 252-observation session window;
+      NULL when fewer than 20 sessions available (documented fixture limitation).
+      hv20 uses 20 log-returns (21 closes). oi_daily_delta is NULL on first observation.
+    columns:
+      - name: pull_date
+        data_tests:
+          - not_null
+          - unique
+      - name: ticker
+        description: "Underlying ticker symbol. Single-ticker example: GME only."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["GME"]
+      - name: gamma_flip_point
+        description: >
+          Strike where cumulative net GEX crosses zero (linear interpolation).
+          Fallback: nearest-to-zero cumulative strike when no crossing exists.
+        data_tests:
+          - not_null
+      - name: iv30
+        description: "OI-weighted average IV for near-30-DTE contracts (20-40 DTE window)."
+        data_tests:
+          - not_null
+      - name: hv20
+        description: >
+          Annualized historical volatility from 20 log-returns (21 closes).
+          Source: gme_underlying_closes seed (Yahoo Finance chart API daily closes).
+          Joined as latest available trade_date <= pull_date to tolerate seed lag.
+      - name: iv_rank
+        description: >
+          (current_iv30 - min_iv30_252d) / (max_iv30_252d - min_iv30_252d).
+          Uses 252-observation session window (not calendar days).
+          NULL when fewer than 20 sessions of iv30 history available.
+      - name: oi_daily_delta
+        description: >
+          Change in total open interest vs previous pull_date.
+          NULL on first observation (no prior day to compare).
+      - name: dealer_net_gamma
+        description: "Total dealer gamma exposure: sum of per-contract GEX contribution."
+        data_tests:
+          - not_null
+      - name: iv_percentile
+        description: >
+          Fraction of 252-session window where iv30 was below current iv30.
+          Uses observation count, not calendar days.
+          NULL when fewer than 20 sessions of iv30 history available.
+
   # --- ADS Layer ---
   - name: gme_ads_market_dashboard
-    description: "One-big-table combining daily snapshot with calendar attributes for dashboard consumption. Grain: one row per day."
+    description: >
+      One-big-table combining daily snapshot and Phase-1 options metrics
+      with calendar attributes for dashboard consumption. Grain: one row per day.
     columns:
       - name: pull_date
         data_tests:
@@ -146,5 +202,17 @@ models:
         data_tests:
           - not_null
       - name: ticker
+        data_tests:
+          - not_null
+      - name: gamma_flip_point
+        description: "Strike where cumulative net GEX crosses zero."
+        data_tests:
+          - not_null
+      - name: iv30
+        description: "OI-weighted average IV for near-30-DTE contracts."
+        data_tests:
+          - not_null
+      - name: dealer_net_gamma
+        description: "Total dealer gamma exposure."
         data_tests:
           - not_null

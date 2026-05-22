@@ -29,7 +29,12 @@ Every metric card links to a free public reference site for independent verifica
 | Max Pain | [SwaggyStocks](https://swaggystocks.com/dashboard/options-max-pain/GME) |
 | P/C Ratio | [Barchart](https://www.barchart.com/stocks/quotes/GME/options-overview) |
 | Net GEX | [SqueezeMetrics](https://squeezemetrics.com/monitor/dix) |
-| IV / Convergence | [MarketChameleon](https://marketchameleon.com/Overview/GME/IV/) |
+| IV30 | [MarketChameleon](https://marketchameleon.com/Overview/GME/IV/) |
+| Gamma Flip | [SqueezeMetrics](https://squeezemetrics.com/monitor/dix) |
+| HV20 | [MarketChameleon](https://marketchameleon.com/Overview/GME/IV/) |
+| IV Rank / Percentile | [MarketChameleon](https://marketchameleon.com/Overview/GME/IV/) |
+| Dealer Net Gamma | [SqueezeMetrics](https://squeezemetrics.com/monitor/dix) |
+| OI Daily Delta | [Barchart](https://www.barchart.com/stocks/quotes/GME/options-overview) |
 
 ## Architecture
 
@@ -42,8 +47,8 @@ Every metric card links to a free public reference site for independent verifica
 | ODS | `gme_ods_cboe_options_chain` | Fixture-backed by default (Parquet); live CBOE via httpfs when `use_fixture: false` |
 | DIM | `gme_dim_date` | Conformed date dimension with trading day flag (seeded 2024-2027) |
 | DWD | `gme_dwd_option_contract_di` | Cleaned option contracts with GEX computed, series classified |
-| DWS | `gme_dws_strike_gex_1d`, `gme_dws_daily_snapshot_1d` | Strike-level GEX + daily summary (max pain, P/C ratio, top OI) |
-| ADS | `gme_ads_market_dashboard` | One-big-table combining market snapshot with calendar attributes |
+| DWS | `gme_dws_strike_gex_1d`, `gme_dws_daily_snapshot_1d`, `gme_dws_options_metrics_1d` | Strike-level GEX + daily summary + Phase-1 options metrics |
+| ADS | `gme_ads_market_dashboard` | One-big-table combining market snapshot, Phase-1 metrics, and calendar attributes |
 
 ### Data Source
 
@@ -51,13 +56,20 @@ By default, the ODS reads from `fixtures/gme_ods_cboe_options_chain.parquet` —
 
 To switch to live data, set `use_fixture: false` in `dbt_project.yml`. CBOE provides free delayed quotes (15-min lag) at `cdn.cboe.com`; the ODS model uses DuckDB's httpfs extension to read JSON directly — no API key or intermediate files needed.
 
+### Underlying Closes Seed
+
+`seeds/gme_underlying_closes.csv` contains 260 trading days of GME daily closing prices (2025-05-08 to 2026-05-20) sourced from the Yahoo Finance chart API (`query2.finance.yahoo.com/v8/finance/chart/GME`). This seed powers the HV20 (20-day historical volatility) metric in `gme_dws_options_metrics_1d`.
+
+To refresh: re-fetch from `https://query2.finance.yahoo.com/v8/finance/chart/GME?period1=<start_epoch>&period2=<end_epoch>&interval=1d&events=history`, extract timestamps and closes, and overwrite the CSV. The seed is deterministic for CI once committed; live refresh is optional.
+
 ## Bus Matrix
 
 ```
-                              dim_date
+                              dim_date  gme_underlying_closes
 gme_dwd_option_contract_di       X
 gme_dws_strike_gex_1d            X
 gme_dws_daily_snapshot_1d        X
+gme_dws_options_metrics_1d       X            X
 gme_ads_market_dashboard         X
 ```
 
@@ -68,6 +80,13 @@ gme_ads_market_dashboard         X
 | GEX contribution | `gamma * OI * 100 * spot^2 * 0.01 * sign(call=+1, put=-1)` | DWD |
 | Max pain | Strike minimizing total exercise value across all contracts | DWS |
 | P/C ratio | Put OI / Call OI | DWS |
+| Gamma flip point | Strike where cumulative net GEX crosses zero (interpolated); fallback: nearest-to-zero strike | DWS |
+| IV30 | OI-weighted average IV for near-30-DTE contracts (20-40 DTE window) | DWS |
+| HV20 | `STDDEV(ln(close/prev_close)) * SQRT(252)` over 20 trading days; uses `gme_underlying_closes` seed | DWS |
+| IV Rank | `(iv30 - min_iv30_252d) / (max_iv30_252d - min_iv30_252d)`; NULL when < 20 days history | DWS |
+| OI daily delta | `total_oi(today) - total_oi(yesterday)` via LAG; NULL on first observation | DWS |
+| Dealer net gamma | Sum of per-contract GEX contribution (dollar gamma exposure) | DWS |
+| IV Percentile | Fraction of 252-day window where IV30 < current IV30; NULL when < 20 days history | DWS |
 
 ## OpenBB Provider Probe
 

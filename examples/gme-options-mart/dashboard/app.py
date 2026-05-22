@@ -44,10 +44,49 @@ METRIC_CARDS = [
         "verify_url": "https://squeezemetrics.com/monitor/dix",
     },
     {
-        "label": "IV Rank",
-        "column": "max_pain_convergence_pct",
-        "fmt": "{:.1f}%",
+        "label": "IV30",
+        "column": "iv30",
+        "fmt": "{:.1%}",
         "verify_url": "https://marketchameleon.com/Overview/GME/IV/",
+    },
+]
+
+PHASE1_CARDS = [
+    {
+        "label": "Gamma Flip",
+        "column": "gamma_flip_point",
+        "fmt": "${:,.2f}",
+        "verify_url": "https://squeezemetrics.com/monitor/dix",
+    },
+    {
+        "label": "HV20",
+        "column": "hv20",
+        "fmt": "{:.1%}",
+        "verify_url": "https://marketchameleon.com/Overview/GME/IV/",
+    },
+    {
+        "label": "IV Rank",
+        "column": "iv_rank",
+        "fmt": "{:.1%}",
+        "verify_url": "https://marketchameleon.com/Overview/GME/IV/",
+    },
+    {
+        "label": "IV Percentile",
+        "column": "iv_percentile",
+        "fmt": "{:.1%}",
+        "verify_url": "https://www.optionistics.com/quotes/iv-rank",
+    },
+    {
+        "label": "OI Daily Delta",
+        "column": "oi_daily_delta",
+        "fmt": "{:,.0f}",
+        "verify_url": "https://www.barchart.com/stocks/quotes/GME/options-overview",
+    },
+    {
+        "label": "Dealer Net Gamma",
+        "column": "dealer_net_gamma",
+        "fmt": "{:,.0f}",
+        "verify_url": "https://squeezemetrics.com/monitor/dix",
     },
 ]
 
@@ -69,6 +108,13 @@ _LATEST_COLUMNS = ", ".join([
     "top_oi_strike_1",
     "top_oi_strike_2",
     "top_oi_strike_3",
+    "gamma_flip_point",
+    "iv30",
+    "hv20",
+    "iv_rank",
+    "oi_daily_delta",
+    "dealer_net_gamma",
+    "iv_percentile",
 ])
 
 
@@ -81,7 +127,7 @@ def load_latest():
     ).fetchdf()
 
 
-_HISTORY_COLUMNS = "pull_date, spot, net_gex, pc_ratio"
+_HISTORY_COLUMNS = "pull_date, spot, net_gex, pc_ratio, iv30, hv20"
 
 
 @st.cache_data(ttl=300)
@@ -118,6 +164,19 @@ def dqc_badge(scorecard: dict | None) -> str:
     return ":gray[DQC: UNKNOWN]"
 
 
+def render_cards(cards, row):
+    cols = st.columns(len(cards))
+    for i, card in enumerate(cards):
+        with cols[i]:
+            val = row.get(card["column"])
+            if val is not None and val == val:
+                formatted = card["fmt"].format(val)
+            else:
+                formatted = "N/A"
+            st.metric(card["label"], formatted)
+            st.caption(f"[Fact-check ↗]({card['verify_url']})")
+
+
 def main():
     scorecard = load_dqc()
 
@@ -135,13 +194,13 @@ def main():
     row = df.iloc[0]
     st.caption(f"Data as of: **{row.get('pull_date', 'N/A')}**")
 
-    cols = st.columns(len(METRIC_CARDS))
-    for i, card in enumerate(METRIC_CARDS):
-        with cols[i]:
-            val = row.get(card["column"])
-            formatted = card["fmt"].format(val) if val is not None else "N/A"
-            st.metric(card["label"], formatted)
-            st.caption(f"[Fact-check ↗]({card['verify_url']})")
+    st.subheader("Market Overview")
+    render_cards(METRIC_CARDS, row)
+
+    st.divider()
+
+    st.subheader("Phase-1 Options Metrics")
+    render_cards(PHASE1_CARDS, row)
 
     st.divider()
 
@@ -156,13 +215,19 @@ def main():
     if not history.empty and len(history) > 1:
         st.divider()
         st.subheader("Trend")
-        tab_spot, tab_gex, tab_pc = st.tabs(["Spot", "GEX", "P/C Ratio"])
+        tab_spot, tab_gex, tab_pc, tab_iv, tab_hv = st.tabs(
+            ["Spot", "GEX", "P/C Ratio", "IV30", "HV20"]
+        )
         with tab_spot:
             st.line_chart(history.set_index("pull_date")["spot"])
         with tab_gex:
             st.line_chart(history.set_index("pull_date")["net_gex"])
         with tab_pc:
             st.line_chart(history.set_index("pull_date")["pc_ratio"])
+        with tab_iv:
+            st.line_chart(history.set_index("pull_date")["iv30"])
+        with tab_hv:
+            st.line_chart(history.set_index("pull_date")["hv20"])
 
 
 if __name__ == "__main__":
