@@ -84,6 +84,18 @@ def load_run_results(path: Path) -> tuple[dict, dict, str]:
     return class_tests, class_failures, generated_at
 
 
+def create_seed_scorecard() -> dict:
+    """Generate a minimal scorecard with one entry per control class."""
+    return {
+        "mart": "",
+        "generated_at": "",
+        "controls": [
+            {"class": cls, "status": "pending", "linked_dbt_tests": [], "attempts": []}
+            for cls in CONTROL_CLASS_RULES
+        ],
+    }
+
+
 def update_scorecard(
     scorecard_path: Path,
     class_tests: dict[str, list[str]],
@@ -91,7 +103,11 @@ def update_scorecard(
     run_timestamp: str,
 ) -> dict:
     """Update scorecard with dbt test linkage and pass/fail status."""
-    scorecard = json.loads(scorecard_path.read_text())
+    if scorecard_path.exists():
+        scorecard = json.loads(scorecard_path.read_text())
+    else:
+        print(f"INFO: {scorecard_path} not found — generating seed scorecard.", file=sys.stderr)
+        scorecard = create_seed_scorecard()
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     scorecard["generated_at"] = now
 
@@ -137,9 +153,6 @@ def main():
 
     if not run_results_path.exists():
         print(f"ERROR: {run_results_path} not found. Run 'dbt test' first.", file=sys.stderr)
-        sys.exit(1)
-    if not scorecard_path.exists():
-        print(f"ERROR: {scorecard_path} not found.", file=sys.stderr)
         sys.exit(1)
 
     class_tests, class_failures, run_timestamp = load_run_results(run_results_path)
