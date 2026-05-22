@@ -188,8 +188,8 @@ models:
   - name: gme_dws_social_sentiment_1d
     description: >
       Daily social sentiment aggregates from seed fixture.
-      Grain: one row per ticker per day.
-      Fixture-backed for CI; live fetch is optional when credentials are present.
+      Grain: one row per pull_date for ticker GME (single-ticker public example).
+      Seed/fixture-only; no live fetch code exists in this repo.
     columns:
       - name: pull_date
         data_tests:
