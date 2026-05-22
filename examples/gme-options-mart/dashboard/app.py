@@ -61,7 +61,7 @@ PHASE1_CARDS = [
     {
         "label": "HV20",
         "column": "hv20",
-        "fmt": "{:.1%}" if True else "N/A",
+        "fmt": "{:.1%}",
         "verify_url": "https://marketchameleon.com/Overview/GME/IV/",
     },
     {

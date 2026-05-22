@@ -56,6 +56,12 @@ By default, the ODS reads from `fixtures/gme_ods_cboe_options_chain.parquet` —
 
 To switch to live data, set `use_fixture: false` in `dbt_project.yml`. CBOE provides free delayed quotes (15-min lag) at `cdn.cboe.com`; the ODS model uses DuckDB's httpfs extension to read JSON directly — no API key or intermediate files needed.
 
+### Underlying Closes Seed
+
+`seeds/gme_underlying_closes.csv` contains 260 trading days of GME daily closing prices (2025-05-08 to 2026-05-20) sourced from the Yahoo Finance chart API (`query2.finance.yahoo.com/v8/finance/chart/GME`). This seed powers the HV20 (20-day historical volatility) metric in `gme_dws_options_metrics_1d`.
+
+To refresh: re-fetch from `https://query2.finance.yahoo.com/v8/finance/chart/GME?period1=<start_epoch>&period2=<end_epoch>&interval=1d&events=history`, extract timestamps and closes, and overwrite the CSV. The seed is deterministic for CI once committed; live refresh is optional.
+
 ## Bus Matrix
 
 ```

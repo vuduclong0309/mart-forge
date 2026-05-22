@@ -155,7 +155,9 @@ models:
         data_tests:
           - not_null
       - name: hv20
-        description: "20-trading-day historical volatility of underlying closes (annualized)."
+        description: >
+          20-trading-day annualized historical volatility of underlying closes.
+          Source: gme_underlying_closes seed (Yahoo Finance chart API daily closes).
       - name: iv_rank
         description: >
           (current_iv30 - min_iv30_252d) / (max_iv30_252d - min_iv30_252d).
