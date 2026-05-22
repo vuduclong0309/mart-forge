@@ -102,7 +102,14 @@ class TestScaffoldGateBRD:
         brd.write_text(PENDING_BRD_SIGNOFF)
         result = runner.invoke(main, ["scaffold", "--domain", "test"])
         assert result.exit_code != 0
-        assert "no approved sign-off" in result.output
+        assert "unapproved sign-off" in result.output
+
+    def test_scaffold_fails_when_brd_has_no_signoff_rows(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text("# BRD\n\nNo sign-off section at all.\n")
+        result = runner.invoke(main, ["scaffold", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "no sign-off rows" in result.output
 
 
 # ── scaffold without TDD ────────────────────────────────────────────────────
@@ -122,7 +129,16 @@ class TestScaffoldGateTDD:
         tdd.write_text(PENDING_TDD_SIGNOFF)
         result = runner.invoke(main, ["scaffold", "--domain", "test"])
         assert result.exit_code != 0
-        assert "no approved sign-off" in result.output
+        assert "unapproved sign-off" in result.output
+
+    def test_scaffold_fails_when_tdd_has_no_signoff_rows(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text(APPROVED_BRD_SIGNOFF)
+        tdd = project_dir / "tech-design-doc.md"
+        tdd.write_text("# TDD\n\nNo sign-off section at all.\n")
+        result = runner.invoke(main, ["scaffold", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "no sign-off rows" in result.output
 
 
 # ── scaffold succeeds only with both approved ───────────────────────────────
@@ -154,7 +170,14 @@ class TestTddGateBRD:
         brd.write_text(PENDING_BRD_SIGNOFF)
         result = runner.invoke(main, ["tdd", "--domain", "test"])
         assert result.exit_code != 0
-        assert "no approved sign-off" in result.output
+        assert "unapproved sign-off" in result.output
+
+    def test_tdd_fails_when_brd_has_no_signoff_rows(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text("# BRD\n\nNo sign-off section.\n")
+        result = runner.invoke(main, ["tdd", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "no sign-off rows" in result.output
 
     def test_tdd_succeeds_with_approved_brd(self, project_dir: Path, runner):
         brd = project_dir / "business-requirements.md"
