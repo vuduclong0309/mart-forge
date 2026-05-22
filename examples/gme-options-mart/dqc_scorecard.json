@@ -167,9 +167,10 @@
         {
           "source": "OpenBB cboe provider (obb.derivatives.options.chains, provider='cboe')",
           "result": "not_independent",
-          "reason": "OpenBB cboe provider fetches from the same cdn.cboe.com endpoint used by the primary ODS ingest. It is not an independent reconciliation source. Per-contract greeks are already ingested; CBOE publishes no pre-computed GEX aggregate.",
+          "reason": "OpenBB cboe provider fetches from the same cdn.cboe.com endpoint used by the primary ODS ingest. Not an independent reconciliation source. Probe classifies cboe as not_independent before making any API call.",
           "date": "2026-05-22",
-          "evidence_uri": "examples/gme-options-mart/scripts/openbb_gex_probe.py"
+          "evidence_uri": "examples/gme-options-mart/scripts/openbb_gex_probe.py",
+          "command": "python scripts/openbb_gex_probe.py --providers cboe"
         },
         {
           "source": "OpenBB yfinance provider (obb.derivatives.options.chains, provider='yfinance')",
@@ -177,7 +178,7 @@
           "reason": "yfinance returns 905 contracts with open_interest, underlying_price, strike, implied_volatility, option_type \u2014 but no gamma column. Without gamma, GEX cannot be computed. OpenBB v4.7.1, openbb-yfinance v1.6.2.",
           "date": "2026-05-22",
           "evidence_uri": "examples/gme-options-mart/scripts/openbb_gex_probe.py",
-          "command": "from openbb import obb; resp = obb.derivatives.options.chains('GME', provider='yfinance'); df = resp.to_df(); print(sorted(df.columns.tolist()))",
+          "command": "python scripts/openbb_gex_probe.py --providers yfinance",
           "columns_returned": ["ask", "bid", "change", "change_percent", "contract_symbol", "currency", "dte", "expiration", "implied_volatility", "in_the_money", "last_trade_price", "last_trade_time", "open_interest", "option_type", "strike", "underlying_price", "underlying_symbol", "volume"]
         },
         {
@@ -186,8 +187,8 @@
           "reason": "Intrinio requires a paid API key (intrinio_api_key). No free tier available for options chain data with greeks.",
           "date": "2026-05-22",
           "evidence_uri": "https://docs.openbb.co/platform/settings/user_settings/api_keys",
-          "command": "from openbb import obb; obb.derivatives.options.chains('GME', provider='intrinio')",
-          "exception": "OpenBBError: [Error] -> Missing credential 'intrinio_api_key'"
+          "command": "python scripts/openbb_gex_probe.py --providers intrinio",
+          "exception": "OpenBBError: Missing credential 'intrinio_api_key'"
         },
         {
           "source": "OpenBB tradier provider (obb.derivatives.options.chains, provider='tradier')",
@@ -195,8 +196,8 @@
           "reason": "Tradier available after installing openbb-tradier (v1.5.0), but requires tradier_api_key. OpenBBError: Missing credential 'tradier_api_key'.",
           "date": "2026-05-22",
           "evidence_uri": "examples/gme-options-mart/scripts/openbb_gex_probe.py",
-          "command": "uv pip install openbb-tradier && python -c \"from openbb import obb; obb.derivatives.options.chains('GME', provider='tradier')\"",
-          "exception": "OpenBBError: [Error] -> Missing credential 'tradier_api_key'"
+          "command": "python scripts/openbb_gex_probe.py --providers tradier",
+          "exception": "OpenBBError: Missing credential 'tradier_api_key'"
         },
         {
           "source": "CBOE delayed quotes API (cdn.cboe.com) \u2014 direct",

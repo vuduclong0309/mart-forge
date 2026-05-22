@@ -7,7 +7,8 @@ sufficient to compute Gamma Exposure (GEX).
 GEX formula (per contract):
     gamma * open_interest * 100 * spot^2 * 0.01 * sign(call=+1, put=-1)
 
-Required fields: gamma, open_interest, underlying_price (spot), option_type.
+Required fields: gamma, open_interest, underlying_price (spot).
+Option type (call/put) is resolved via aliases: option_type, contract_type, type.
 
 Usage (isolated venv via uv):
     uv venv /tmp/openbb-probe && source /tmp/openbb-probe/bin/activate
@@ -25,12 +26,24 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import traceback
 from datetime import datetime, timezone
 
 SYMBOL = "GME"
 PROVIDERS = ["cboe", "yfinance", "intrinio", "tradier"]
 GEX_REQUIRED_FIELDS = {"gamma", "open_interest", "underlying_price"}
+OPTION_TYPE_ALIASES = ["option_type", "contract_type", "type"]
+
+
+def _sanitize_exception(exc: Exception) -> str:
+    return f"{type(exc).__name__}: {str(exc)[:300]}"
+
+
+def _resolve_option_type_col(columns: set) -> str | None:
+    for alias in OPTION_TYPE_ALIASES:
+        matches = [c for c in columns if c.lower() == alias]
+        if matches:
+            return matches[0]
+    return None
 
 
 def probe_provider(obb, provider: str) -> dict:
@@ -38,7 +51,16 @@ def probe_provider(obb, provider: str) -> dict:
         "source": f"OpenBB obb.derivatives.options.chains('{SYMBOL}', provider='{provider}')",
         "provider": provider,
         "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "command": f"obb.derivatives.options.chains('{SYMBOL}', provider='{provider}')",
     }
+
+    if provider == "cboe":
+        result.update(
+            result="not_independent",
+            reason="OpenBB cboe provider fetches from cdn.cboe.com — the same endpoint "
+                   "as the primary ODS ingest. Cannot serve as independent reconciliation source.",
+        )
+        return result
 
     try:
         resp = obb.derivatives.options.chains(SYMBOL, provider=provider)
@@ -46,11 +68,13 @@ def probe_provider(obb, provider: str) -> dict:
         msg = str(exc)
         if "credentials" in msg.lower() or "api_key" in msg.lower() or "unauthorized" in msg.lower():
             result.update(result="credentials_required", reason=msg[:300])
+        elif "not available" in msg.lower() or "not supported" in msg.lower():
+            result.update(result="not_available", reason=msg[:300])
         elif "not found" in msg.lower() or "no data" in msg.lower():
             result.update(result="no_data", reason=msg[:300])
         else:
             result.update(result="error", reason=msg[:300])
-        result["evidence"] = traceback.format_exc().splitlines()[-3:]
+        result["exception"] = _sanitize_exception(exc)
         return result
 
     try:
@@ -67,18 +91,25 @@ def probe_provider(obb, provider: str) -> dict:
     result["columns_returned"] = sorted(columns)
 
     missing = GEX_REQUIRED_FIELDS - columns
-    if missing:
+    option_type_col = _resolve_option_type_col(columns)
+
+    if missing or option_type_col is None:
+        missing_display = sorted(missing)
+        if option_type_col is None:
+            missing_display.append("option_type (or alias)")
         result.update(
             result="insufficient_fields",
-            reason=f"Missing GEX-required fields: {sorted(missing)}",
+            reason=f"Missing GEX-required fields: {missing_display}",
         )
         gamma_candidates = [c for c in columns if "gamma" in c.lower()]
         oi_candidates = [c for c in columns if "interest" in c.lower() or "oi" in c.lower()]
         spot_candidates = [c for c in columns if "underlying" in c.lower() or "spot" in c.lower()]
+        type_candidates = [c for c in columns if "type" in c.lower()]
         result["field_hints"] = {
             "gamma_like": gamma_candidates,
             "oi_like": oi_candidates,
             "spot_like": spot_candidates,
+            "type_like": type_candidates,
         }
         return result
 
@@ -97,20 +128,6 @@ def probe_provider(obb, provider: str) -> dict:
     spot = df["underlying_price"].dropna().iloc[0] if df["underlying_price"].notna().any() else None
     if spot is None or spot <= 0:
         result.update(result="no_data", reason="underlying_price is null or non-positive")
-        return result
-
-    option_type_col = "option_type" if "option_type" in columns else None
-    if option_type_col is None:
-        for c in columns:
-            if c.lower() in ("option_type", "contract_type", "type"):
-                option_type_col = c
-                break
-
-    if option_type_col is None:
-        result.update(
-            result="insufficient_fields",
-            reason="No option_type column found to determine call/put sign",
-        )
         return result
 
     gex_df = df[df["gamma"].notna() & df["open_interest"].notna()].copy()

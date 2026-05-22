@@ -79,16 +79,18 @@ uv pip install 'openbb>=4.5' openbb-tradier
 python scripts/openbb_gex_probe.py --pretty
 ```
 
-Providers attempted (OpenBB 4.7.1, openbb-tradier 1.5.0, 2026-05-22):
+The probe classifies each provider automatically. Statuses in this table and in `dqc_scorecard.json` are reproducible by re-running the script:
 
-| Provider | Result | Reason |
-|----------|--------|--------|
-| `cboe` | not independent | Same cdn.cboe.com endpoint as primary ODS — not a separate source |
-| `yfinance` | insufficient fields | Returns 905 contracts but **no gamma column** — GEX not computable |
-| `intrinio` | credentials required | Paid API key (`intrinio_api_key`) needed |
-| `tradier` | credentials required | Available via `openbb-tradier`; requires `tradier_api_key` |
+| Provider | Probe Status | Reason |
+|----------|-------------|--------|
+| `cboe` | `not_independent` | Same cdn.cboe.com endpoint as primary ODS — independence guard, skipped before API call |
+| `yfinance` | `insufficient_fields` | Returns contracts but **no gamma column** — GEX not computable |
+| `intrinio` | `credentials_required` | Paid API key (`intrinio_api_key`) needed |
+| `tradier` | `credentials_required` | Available via `openbb-tradier`; requires `tradier_api_key` |
 
-If a future OpenBB provider or yfinance update adds gamma to the response, re-run the probe to upgrade business reconciliation from proxy to direct.
+Unsupported providers (if probed in the future) are classified as `not_available`.
+
+Re-run the probe when providers update to check if business reconciliation can upgrade from proxy to direct.
 
 ## DQC Control Catalog
 
