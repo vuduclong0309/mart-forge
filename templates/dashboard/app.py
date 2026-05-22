@@ -9,10 +9,15 @@ Customization points (search "TEMPLATE"):
   - ADS_TABLE: name of the ADS model
   - METRIC_CARDS: list of dicts defining each card
   - DQC_SCORECARD: path to dqc_scorecard.json
+
+Usage:
+  streamlit run app.py [-- --columns col1,col2,...]
 """
 
+import argparse
 import json
 import pathlib
+import sys
 
 import duckdb
 import streamlit as st
@@ -31,6 +36,15 @@ METRIC_CARDS: list[dict] = [
     #  "verify_url": "https://example.com/revenue-check"},
 ]
 
+# ── --columns override ─────────────────────────────────────────────
+_parser = argparse.ArgumentParser(add_help=False)
+_parser.add_argument(
+    "--columns", default=None,
+    help="Comma-separated column list to fetch instead of SELECT *",
+)
+_args, _ = _parser.parse_known_args(sys.argv[1:])
+COLUMN_OVERRIDE: str | None = _args.columns
+
 st.set_page_config(page_title="{{ mart_name }} Dashboard", layout="wide")
 
 
@@ -42,11 +56,14 @@ def get_db():
 @st.cache_data(ttl=300)
 def load_latest():
     db = get_db()
-    columns = ", ".join(
-        ["pull_date"] + [card["column"] for card in METRIC_CARDS]
-    )
+    if COLUMN_OVERRIDE:
+        cols = ", ".join(c.strip() for c in COLUMN_OVERRIDE.split(","))
+    else:
+        # SELECT * is intentional: ADS column sets vary per mart, so the
+        # template cannot hard-code them.  Use --columns to restrict.
+        cols = "*"
     return db.sql(
-        f"SELECT {columns} FROM {ADS_TABLE} ORDER BY pull_date DESC LIMIT 1"
+        f"SELECT {cols} FROM {ADS_TABLE} ORDER BY pull_date DESC LIMIT 1"
     ).fetchdf()
 
 
