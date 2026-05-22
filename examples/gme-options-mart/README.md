@@ -69,6 +69,29 @@ gme_ads_market_dashboard         X
 | Max pain | Strike minimizing total exercise value across all contracts | DWS |
 | P/C ratio | Put OI / Call OI | DWS |
 
+## OpenBB Provider Probe
+
+OpenBB Platform is registered as a reconciliation provider for independent GEX cross-verification. A probe script tests each OpenBB provider for GME options chain data:
+
+```bash
+uv venv /tmp/openbb-probe && source /tmp/openbb-probe/bin/activate
+uv pip install 'openbb>=4.5' openbb-tradier
+python scripts/openbb_gex_probe.py --pretty
+```
+
+The probe classifies each provider automatically. Statuses in this table and in `dqc_scorecard.json` are reproducible by re-running the script:
+
+| Provider | Probe Status | Reason |
+|----------|-------------|--------|
+| `cboe` | `not_independent` | Same cdn.cboe.com endpoint as primary ODS — independence guard, skipped before API call |
+| `yfinance` | `insufficient_fields` | Returns contracts but **no gamma column** — GEX not computable |
+| `intrinio` | `credentials_required` | Paid API key (`intrinio_api_key`) needed |
+| `tradier` | `credentials_required` | Available via `openbb-tradier`; requires `tradier_api_key` |
+
+Unsupported providers (if probed in the future) are classified as `not_available`.
+
+Re-run the probe when providers update to check if business reconciliation can upgrade from proxy to direct.
+
 ## DQC Control Catalog
 
 All 8 control classes implemented:
@@ -82,6 +105,6 @@ All 8 control classes implemented:
 | Accepted Ranges | Positive strikes, non-negative OI, plausible P/C ratio | pass |
 | Duplicate Detection | Singular test on `(pull_date, option_symbol)` grain | pass |
 | Null-Rate Threshold | Greeks null rate < 5% in DWD | pass |
-| Business Reconciliation | GEX vs external source — **unavailable** (paywalled, waiver granted) | unavailable |
+| Business Reconciliation | GEX vs external — OpenBB probed, no free gamma source; proxy in place | exhausted |
 
-See `dqc_scorecard.json` for the machine-readable scorecard. The dashboard displays a DQC status badge derived from this file.
+See `dqc_scorecard.json` for the machine-readable scorecard with full `attempts[]` evidence. The dashboard displays a DQC status badge derived from this file.

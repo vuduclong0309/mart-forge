@@ -15,6 +15,17 @@ providers:
     max_object_size: 10485760
     timeout_ms: 30000
     retries: 3
+  reconciliation:
+    - name: openbb
+      role: gex_reconciliation
+      install: "pip install 'openbb>=4.5' openbb-tradier"
+      probe_command: "python scripts/openbb_gex_probe.py --pretty"
+      providers_attempted:
+        - cboe
+        - yfinance
+        - intrinio
+        - tradier
+      note: "OpenBB probed for independent GEX cross-check. See scripts/openbb_gex_probe.py."
 
 schedule:
   cron: "45 20 * * 1-5"
@@ -34,4 +45,4 @@ dqc:
       source: external_reference
       tolerance: 0.5
       severity: warn
-      note: "GEX reconciliation source is paywalled. Waiver per WS-2 finding."
+      note: "OpenBB providers probed (cboe, yfinance, intrinio, tradier). yfinance returns options chains without gamma — GEX not computable. intrinio requires credentials. Proxy reconciliation via ODS-to-DWD row count in place."
