@@ -107,6 +107,8 @@ def dqc_badge(scorecard: dict | None) -> str:
         return ":red[DQC: FAIL]"
     if any(s == "unavailable" for s in statuses):
         return ":orange[DQC: PARTIAL]"
+    if any(s in ("exhausted", "waived") for s in statuses):
+        return ":orange[DQC: PASS WITH WAIVERS]"
     return ":green[DQC: PASS]"
 
 

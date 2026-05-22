@@ -16,12 +16,14 @@ models:
         data_tests:
           - not_null
           - accepted_values:
-              values: ["GME"]
+              arguments:
+                values: ["GME"]
       - name: provider
         data_tests:
           - not_null
           - accepted_values:
-              values: ["cboe"]
+              arguments:
+                values: ["cboe"]
       - name: pull_ts_utc
         data_tests:
           - not_null
@@ -36,7 +38,8 @@ models:
       - name: option_type
         data_tests:
           - accepted_values:
-              values: ["call", "put"]
+              arguments:
+                values: ["call", "put"]
       - name: strike
         description: "Option strike price. May be null for non-standard OCC symbols at ODS level — filtered in DWD."
         data_tests:
@@ -82,7 +85,8 @@ models:
         data_tests:
           - not_null
           - accepted_values:
-              values: ["call", "put"]
+              arguments:
+                values: ["call", "put"]
       - name: open_interest
         data_tests:
           - not_null
@@ -93,7 +97,8 @@ models:
         data_tests:
           - not_null
           - accepted_values:
-              values: ["WEEKLY", "MONTHLY", "LEAP"]
+              arguments:
+                values: ["WEEKLY", "MONTHLY", "LEAP"]
 
   # --- DWS Layer ---
   - name: gme_dws_strike_gex_1d
