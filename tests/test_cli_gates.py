@@ -55,6 +55,41 @@ APPROVED_TDD_SIGNOFF = textwrap.dedent("""\
     | Reviewer | Dana | 2026-01-01 | approved |
 """)
 
+BRD_MISSING_CONSUMER = textwrap.dedent("""\
+    ## 7. Sign-Off
+
+    | Role | Name | Date | Status |
+    |------|------|------|--------|
+    | Operator (data owner) | Alice | 2026-01-01 | approved |
+""")
+
+TDD_MISSING_REVIEWER = textwrap.dedent("""\
+    ## Sign-Off
+
+    | Role | Name | Date | Status |
+    |------|------|------|--------|
+    | Tech lead / designer | Charlie | 2026-01-01 | approved |
+""")
+
+BRD_DUPLICATE_OPERATOR = textwrap.dedent("""\
+    ## 7. Sign-Off
+
+    | Role | Name | Date | Status |
+    |------|------|------|--------|
+    | Operator (data owner) | Alice | 2026-01-01 | approved |
+    | Operator (data owner) | Eve | 2026-01-02 | approved |
+    | Consumer (primary user) | Bob | 2026-01-01 | approved |
+""")
+
+BRD_PARTIAL_APPROVAL = textwrap.dedent("""\
+    ## 7. Sign-Off
+
+    | Role | Name | Date | Status |
+    |------|------|------|--------|
+    | Operator (data owner) | Alice | 2026-01-01 | approved |
+    | Consumer (primary user) | Bob | 2026-01-01 | pending |
+""")
+
 PENDING_TDD_SIGNOFF = textwrap.dedent("""\
     ## Sign-Off
 
@@ -185,3 +220,49 @@ class TestTddGateBRD:
         result = runner.invoke(main, ["tdd", "--domain", "test"])
         assert result.exit_code == 0, result.output
         assert (project_dir / "tech-design-doc.md").exists()
+
+
+# ── role-aware approval gate ──────────────────────────────────────────────────
+
+class TestRoleAwareApprovalGate:
+    def test_brd_missing_consumer_role_blocked(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text(BRD_MISSING_CONSUMER)
+        result = runner.invoke(main, ["tdd", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "missing mandatory sign-off role" in result.output
+        assert "consumer (primary user)" in result.output
+
+    def test_tdd_missing_reviewer_role_blocked(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text(APPROVED_BRD_SIGNOFF)
+        tdd = project_dir / "tech-design-doc.md"
+        tdd.write_text(TDD_MISSING_REVIEWER)
+        result = runner.invoke(main, ["scaffold", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "missing mandatory sign-off role" in result.output
+        assert "reviewer" in result.output
+
+    def test_duplicate_approved_role_blocked(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text(BRD_DUPLICATE_OPERATOR)
+        result = runner.invoke(main, ["tdd", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "duplicate sign-off role" in result.output
+        assert "operator (data owner)" in result.output
+
+    def test_partial_approval_blocked(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text(BRD_PARTIAL_APPROVAL)
+        result = runner.invoke(main, ["tdd", "--domain", "test"])
+        assert result.exit_code != 0
+        assert "unapproved sign-off" in result.output
+
+    def test_fully_role_complete_and_approved_passes(self, project_dir: Path, runner):
+        brd = project_dir / "business-requirements.md"
+        brd.write_text(APPROVED_BRD_SIGNOFF)
+        tdd = project_dir / "tech-design-doc.md"
+        tdd.write_text(APPROVED_TDD_SIGNOFF)
+        result = runner.invoke(main, ["scaffold", "--domain", "test"])
+        assert result.exit_code == 0, result.output
+        assert "Scaffolded" in result.output
