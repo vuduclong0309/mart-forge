@@ -59,19 +59,36 @@ def get_db():
     return duckdb.connect(str(DB_PATH), read_only=True)
 
 
+_LATEST_COLUMNS = ", ".join([
+    "pull_date",
+    "spot",
+    "max_pain_strike",
+    "max_pain_convergence_pct",
+    "net_gex",
+    "pc_ratio",
+    "top_oi_strike_1",
+    "top_oi_strike_2",
+    "top_oi_strike_3",
+])
+
+
 @st.cache_data(ttl=300)
 def load_latest():
     db = get_db()
     return db.sql(
-        f"SELECT * FROM {ADS_TABLE} ORDER BY pull_date DESC LIMIT 1"
+        f"SELECT {_LATEST_COLUMNS} FROM {ADS_TABLE}"
+        " ORDER BY pull_date DESC LIMIT 1"
     ).fetchdf()
+
+
+_HISTORY_COLUMNS = "pull_date, spot, net_gex, pc_ratio"
 
 
 @st.cache_data(ttl=300)
 def load_history():
     db = get_db()
     return db.sql(
-        f"SELECT * FROM {ADS_TABLE} ORDER BY pull_date"
+        f"SELECT {_HISTORY_COLUMNS} FROM {ADS_TABLE} ORDER BY pull_date"
     ).fetchdf()
 
 
