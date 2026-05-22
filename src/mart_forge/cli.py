@@ -21,6 +21,11 @@ LAYER_MATERIALIZATION = {
     "ads": "table",
 }
 
+MANDATORY_SIGNOFF_ROLES: dict[str, tuple[str, ...]] = {
+    "business-requirements.md": ("operator (data owner)", "consumer (primary user)"),
+    "tech-design-doc.md": ("tech lead / designer", "reviewer"),
+}
+
 DBT_PROJECT_TEMPLATE = """\
 name: {profile}
 version: "1.0.0"
@@ -75,11 +80,11 @@ def _find_templates_dir() -> Path:
     )
 
 
-def _parse_signoff_rows(path: Path) -> list[str]:
-    """Return the list of sign-off status values found in *path*."""
+def _parse_signoff_rows(path: Path) -> list[tuple[str, str]]:
+    """Return (role, status) pairs for each sign-off row in *path*."""
     _STATUSES = {"pending", "approved", "approved-with-conditions", "rejected"}
     content = path.read_text()
-    rows: list[str] = []
+    rows: list[tuple[str, str]] = []
     for line in content.splitlines():
         cells = [c.strip() for c in line.split("|")]
         cells = [c for c in cells if c]
@@ -87,16 +92,22 @@ def _parse_signoff_rows(path: Path) -> list[str]:
             continue
         status = cells[-1].lower()
         if status in _STATUSES:
-            rows.append(status)
+            rows.append((cells[0].lower(), status))
     return rows
 
 
 def _doc_has_approval(path: Path) -> bool:
-    """Return True if at least 1 sign-off row exists and ALL are approved."""
+    """Return True if mandatory roles are present exactly once and all rows approved."""
     rows = _parse_signoff_rows(path)
     if not rows:
         return False
-    return all(s in ("approved", "approved-with-conditions") for s in rows)
+    required = MANDATORY_SIGNOFF_ROLES.get(path.name)
+    if required is not None:
+        found_roles = [r for r, _ in rows]
+        for role in required:
+            if found_roles.count(role) != 1:
+                return False
+    return all(s in ("approved", "approved-with-conditions") for _, s in rows)
 
 
 def _require_approved(path: Path, doc_label: str, next_phase: str) -> None:
@@ -112,7 +123,22 @@ def _require_approved(path: Path, doc_label: str, next_phase: str) -> None:
             f"{doc_label} ({path.name}) has no sign-off rows. "
             f"Add a Sign-Off section with at least one pending row before {next_phase}."
         )
-    if not all(s in ("approved", "approved-with-conditions") for s in rows):
+    required = MANDATORY_SIGNOFF_ROLES.get(path.name)
+    if required is not None:
+        found_roles = [r for r, _ in rows]
+        missing = [r for r in required if r not in found_roles]
+        if missing:
+            raise click.ClickException(
+                f"{doc_label} ({path.name}) is missing mandatory sign-off role(s): "
+                f"{', '.join(missing)}. All required roles must be present."
+            )
+        duplicated = [r for r in required if found_roles.count(r) > 1]
+        if duplicated:
+            raise click.ClickException(
+                f"{doc_label} ({path.name}) has duplicate sign-off role(s): "
+                f"{', '.join(duplicated)}. Each role must appear exactly once."
+            )
+    if not all(s in ("approved", "approved-with-conditions") for _, s in rows):
         raise click.ClickException(
             f"{doc_label} ({path.name}) has unapproved sign-off rows. "
             f"Get sign-off before proceeding to {next_phase}."
