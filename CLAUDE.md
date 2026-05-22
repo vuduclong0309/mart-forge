@@ -19,7 +19,7 @@ If in doubt, replace with a placeholder and note the substitution in the PR desc
 
 - Match existing naming conventions (`docs/naming-conventions.md`).
 - Follow the dimensional lifecycle (`docs/dimensional-lifecycle.md`) for new models.
-- Every example mart must have a sign-off PRD (`templates/sign-off-prd.template.md`).
+- Every example mart must have a BRD (`templates/business-requirements.template.md`). The sign-off PRD (`sign-off-prd.md`) is a generated summary produced alongside the TDD, not a Phase A gate.
 - DQC control catalog is mandatory for all marts (`docs/dqc-framework.md`).
 - `target/`, `*.duckdb`, `logs/`, `dbt_packages/` are gitignored — never force-add them.
 
@@ -29,7 +29,7 @@ If in doubt, replace with a placeholder and note the substitution in the PR desc
 2. **Provenance on every ODS** — `provider`, `pull_ts_utc`, `quote_ts_utc`, `run_id` are non-negotiable.
 3. **Unknown member row** — every DIM includes ID = -1 with all attributes = 'Unknown'.
 4. **Idempotency** — no `current_timestamp()` or `now()` in model logic.
-5. **Phase gates** — no scaffold without a signed-off design document.
+5. **Phase gates** — no scaffold without an approved BRD (Phase A) **and** an approved TDD (Phase B).
 6. **Window suffixes** — DWS models use `_1d`, `_nd`, `_td`, `_mtd`.
 
 ## Skills
@@ -37,7 +37,9 @@ If in doubt, replace with a placeholder and note the substitution in the PR desc
 | Skill | When to use |
 |-------|-------------|
 | `using-mart-forge` | **Start here.** Detects lifecycle phase and routes to the right skill. |
-| `mart-bootstrap` | Scaffold a new mart from a `mart.yml` config (Phase C). |
+| `mart-brd` | Generate a Business Requirements Document from client input (Phase A). |
+| `mart-tdd` | Generate a Tech Design Document after BRD approval (Phase B). |
+| `mart-bootstrap` | Scaffold a new mart from a `mart.yml` config (Phase C — requires approved BRD + TDD). |
 | `dqc-audit` | Audit DQC coverage for an existing mart (Phase D). |
 | `schema-evolve` | Propagate source column additions through the layer stack. |
 | `mart-review` | Adversarial production-readiness review with graded scorecard. |
@@ -45,7 +47,7 @@ If in doubt, replace with a placeholder and note the substitution in the PR desc
 ## Lifecycle
 
 ```
-[A] BRD → [B] TDD → sign-off → [C] Scaffold → [D] DQC → [E] Presentation
+[A] BRD → approval → [B] TDD → approval → [C] Scaffold → [D] DQC → [E] Presentation
 ```
 
 ## Data Layers

@@ -7,8 +7,8 @@ description: |
   - "create a tech design for {mart}"
   - "write TDD for {mart}"
   - "design the physical schema for {mart}"
-  - User has an approved sign-off PRD and wants to specify column-level calculations before code generation
-  - Phase A (mart-bootstrap init + sign-off) is complete and the user wants Phase B design
+  - User has an approved BRD and wants to specify column-level calculations before code generation
+  - Phase A (BRD sign-off) is complete and the user wants Phase B design
 
   **Not for:**
   - Scaffolding directory structure or generating dbt code (use mart-bootstrap Phase B after TDD sign-off)
@@ -18,13 +18,13 @@ description: |
 
 # Mart TDD (Tech Design Document)
 
-Reads an approved `sign-off-prd.md` and `mart.yml` to produce a Tech Design Document with physical table schemas, column-level calculation specs, source-to-target mappings, and a traceability matrix. The TDD is the **Phase B gate** — `mart-bootstrap` must not generate any model code until the TDD is signed off.
+Reads an approved `business-requirements.md` (BRD) and `mart.yml` to produce a Tech Design Document with physical table schemas, column-level calculation specs, source-to-target mappings, and a traceability matrix. The TDD is the **Phase B gate** — `mart-bootstrap` must not generate any model code until the TDD is signed off.
 
 ## HARD GATE
 
 **No scaffold until TDD signed off.** The `mart-bootstrap` Phase B workflow must verify that:
 
-1. `{mart_name}/sign-off-prd.md` exists with both sign-off lines approved (Phase A gate)
+1. `{mart_name}/business-requirements.md` exists with both sign-off lines approved (Phase A gate)
 2. `{mart_name}/tech-design-doc.md` exists with both sign-off lines approved (Phase B gate)
 
 If either gate fails, STOP and inform the user which document is missing or unsigned.
@@ -35,7 +35,7 @@ If either gate fails, STOP and inform the user which document is missing or unsi
 - **Bidirectional traceability is mandatory** — Section 8 must map every TDD metric forward to the model file and line number that will implement it, and every SQL expression backward to the TDD section that specifies it. Until code exists, use planned file paths from `docs/naming-conventions.md`.
 - **Kimball 4-step must be completed** — Section 1 forces the designer to walk through business process selection, grain declaration, dimension identification, and fact identification before touching physical schemas. Skipping this produces marts that violate grain or miss conformed dimensions.
 - **Source-to-target before physical schema** — Section 3 traces raw source fields through each layer. The physical schema (Section 4) then references these transforms. This order prevents inventing columns that have no source.
-- **DQC plan references the approved PRD** — Section 5 control thresholds must match the tolerances declared in `sign-off-prd.md` Section 5. Any deviation must be documented with rationale.
+- **DQC plan references the approved BRD** — Section 5 control thresholds must match the tolerances declared in `business-requirements.md`. Any deviation must be documented with rationale.
 - **No confidential data** — This is an open-source framework. Use generic Kimball terminology. Do not reference proprietary systems, credentials, or internal data sources.
 
 ## Workflow
@@ -45,13 +45,13 @@ If either gate fails, STOP and inform the user which document is missing or unsi
 Before starting, verify:
 
 1. `{mart_name}/mart.yml` exists and passes schema validation
-2. `{mart_name}/sign-off-prd.md` exists with both sign-off lines `approved` or `approved-with-conditions`
+2. `{mart_name}/business-requirements.md` exists with both sign-off lines `approved` or `approved-with-conditions`
 3. Source system schema is known (either from provider docs, a sample pull, or the ODS placeholder from Phase A)
 
 ### Step 1 — Read inputs
 
 - Parse `mart.yml` for mart metadata (name, prefix, grain, providers, schedule, dqc config)
-- Parse `sign-off-prd.md` for approved business context (personas, grain, bus matrix, DQC controls, sensitivity)
+- Parse `business-requirements.md` for approved business context (personas, grain, bus matrix, DQC controls, sensitivity)
 - Read `docs/naming-conventions.md` for model and column naming rules
 - Read `docs/dqc-framework.md` for control class specifications
 - Read `docs/bus-matrix.md` for conformed dimension patterns
@@ -62,7 +62,7 @@ Before starting, verify:
 Fill Section 1 of the TDD template:
 
 1. **Select the business process** — name the operational process, not the source system
-2. **Declare the grain** — use the grain from `mart.yml`, verify it matches the PRD
+2. **Declare the grain** — use the grain from `mart.yml`, verify it matches the BRD
 3. **Identify the dimensions** — list all dimensions from the bus matrix section of the PRD, note SCD type and conformance status
 4. **Identify the facts** — enumerate all metrics/measures, classify as additive/semi-additive/non-additive, note units
 
@@ -103,7 +103,7 @@ Fill Section 5:
 
 1. Build the control coverage matrix (model x control class)
 2. For each test, specify: test type (generic/singular), file location, assertion logic, tolerance, severity
-3. Cross-check thresholds against `sign-off-prd.md` Section 5
+3. Cross-check thresholds against `business-requirements.md`
 
 ### Step 7 — Refresh and monitoring
 
@@ -133,7 +133,7 @@ Present the completed TDD for review. Both sign-off lines must be `approved` or 
 - [ ] All ODS models have provenance columns (provider, pull_ts_utc, quote_ts_utc, run_id)
 - [ ] All DIM models document unknown member row (ID = -1)
 - [ ] DQC plan covers all 8 control classes with specific thresholds
-- [ ] DQC thresholds match sign-off PRD Section 5
+- [ ] DQC thresholds match BRD acceptance criteria
 - [ ] Refresh strategy includes materialization per model and dependency graph
 - [ ] Monitoring plan covers pipeline health and DQC alerting
 - [ ] Traceability matrix is bidirectional (TDD -> SQL, SQL -> TDD)
@@ -144,7 +144,7 @@ Present the completed TDD for review. Both sign-off lines must be `approved` or 
 ## Resources
 
 - `templates/tech-design-doc.template.md` — TDD template
-- `templates/sign-off-prd.template.md` — Phase A PRD template (prerequisite)
+- `templates/business-requirements.template.md` — BRD template (Phase A prerequisite)
 - `docs/naming-conventions.md` — Model and column naming standards
 - `docs/dqc-framework.md` — DQC control class catalog
 - `docs/bus-matrix.md` — Bus matrix design patterns

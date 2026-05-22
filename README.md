@@ -67,7 +67,7 @@ dbt test --profiles-dir .
 mart-forge enforces a methodology-first lifecycle. You cannot scaffold models until the design documents are signed off:
 
 ```
-[A] BRD → [B] TDD → sign-off → [C] Scaffold → [D] DQC → [E] Presentation
+[A] BRD → approval → [B] TDD → approval → [C] Scaffold → [D] DQC → [E] Presentation
 ```
 
 **Phase A — Business Requirements:**
@@ -76,11 +76,11 @@ mart-forge enforces a methodology-first lifecycle. You cannot scaffold models un
 # 1. Create a mart.yml config for your data domain
 #    (see templates/mart.yml.template for the schema)
 
-# 2. Generate the BRD and sign-off PRD
+# 2. Generate the Business Requirements Document (BRD)
 claude /mart-brd
 ```
 
-Review `business-requirements.md` and `sign-off-prd.md`. Set both sign-off lines (operator + consumer) to `approved` before proceeding.
+Review `business-requirements.md`. Set both sign-off lines (operator + consumer) to `approved` before proceeding.
 
 **Phase B — Technical Design:**
 
@@ -112,7 +112,7 @@ The full lifecycle produces these artifacts:
 my-mart/
 ├── mart.yml                  # Domain config (you create this)
 ├── business-requirements.md  # Phase A — BRD with metrics catalog + glossary
-├── sign-off-prd.md           # Phase A — stakeholder sign-off (must be approved)
+├── sign-off-prd.md           # Generated summary (produced alongside TDD, not a Phase A gate)
 ├── tech-design-doc.md        # Phase B — column-level specs + traceability matrix (must be approved)
 ├── models/
 │   ├── ods/                  # Operational Data Store — explicit column list, provenance columns

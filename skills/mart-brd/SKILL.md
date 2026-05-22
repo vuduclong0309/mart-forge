@@ -13,7 +13,7 @@ description: |
   - User provides a case study, data file, verbal description, or existing docs and wants a structured requirements document
 
   **Not for:**
-  - Writing the TDD / technical design (use mart-bootstrap Phase A after BRD sign-off)
+  - Writing the TDD / technical design (use mart-tdd after BRD sign-off)
   - Scaffolding models (use mart-bootstrap Phase B after TDD sign-off)
   - Reviewing an existing mart (use mart-review)
   - Auditing DQC coverage (use dqc-audit)
@@ -128,6 +128,6 @@ The `mart-review` skill checks this traceability at review time.
 ## Resources
 
 - `templates/business-requirements.template.md` -- BRD template with all sections and placeholders
-- `templates/sign-off-prd.template.md` -- Sign-off PRD template (used in Phase B, not Phase A)
+- `templates/sign-off-prd.template.md` -- Sign-off PRD template (generated alongside TDD as a summary, not a Phase A gate)
 - `docs/bus-matrix.md` -- Bus matrix patterns for dimension identification
 - `docs/agent-orchestration.md` -- Lifecycle phases and gate definitions
