@@ -83,25 +83,43 @@ This mart serves as the canonical advanced example for the mart-forge framework,
 | social_mention_count | Total social media mentions for GME on a given day | `SUM(mention_count)` | DWS |
 | social_sentiment_score | Mention-weighted average sentiment score (−1 to +1) | `SUM(sentiment_score * mention_count) / SUM(mention_count)` | DWS |
 
+> **Note:** `social_mention_count` and `social_sentiment_score` use seed fixture data for CI. No free live API provides a mention-weighted score matching this mart's exact definition. `social_sentiment_score` is marked **unsupported** for live fact-check comparison; see Section 2.7.
+
 ### 2.7 Dashboard Outputs
 
-| Dashboard Card | Metric | Fact-Check Reference |
-|----------------|--------|----------------------|
-| Spot Price | spot | Yahoo Finance (GME) |
-| Max Pain | max_pain_strike | SwaggyStocks Max Pain |
-| Max Pain Convergence | max_pain_convergence_pct | SwaggyStocks Max Pain |
-| P/C Ratio | pc_ratio | Barchart Options Overview |
-| Net GEX | net_gex | SqueezeMetrics DIX Monitor |
-| IV30 | iv30 | MarketChameleon IV Overview |
-| Gamma Flip | gamma_flip_point | SqueezeMetrics DIX Monitor |
-| HV20 | hv20 | MarketChameleon IV Overview |
-| IV Rank | iv_rank | MarketChameleon IV Overview |
-| IV Percentile | iv_percentile | Optionistics IV Rank |
-| OI Daily Delta | oi_daily_delta | Barchart Options Overview |
-| Dealer Net Gamma | dealer_net_gamma | SqueezeMetrics DIX Monitor |
-| Social Mentions | social_mention_count | Yahoo Finance Community |
-| Social Sentiment | social_sentiment_score | Yahoo Finance Community |
-| Top OI Strikes | top_oi_strike_1/2/3 | Barchart Options Overview |
+URLs and status labels reflect browser-verified checks run 2026-05-23. Status values: **exact** = asset and metric confirmed; **proxy** = asset confirmed, metric definition may differ; **unsupported** = no viable free live source; **unverified** = page blocked (bot protection or HTTP error).
+
+| Dashboard Card | Metric | Reference Source | Verified URL | Status |
+|----------------|--------|-----------------|--------------|--------|
+| Spot Price | spot | Yahoo Finance | <https://finance.yahoo.com/quote/GME/> | exact |
+| Max Pain | max_pain_strike | Maximum-Pain.com | <https://maximum-pain.com/options/GME> | exact |
+| Max Pain Convergence | max_pain_convergence_pct | Maximum-Pain.com | <https://maximum-pain.com/options/GME> | proxy |
+| P/C Ratio | pc_ratio | Barchart Put/Call Ratio | <https://www.barchart.com/stocks/quotes/GME/put-call-ratios> | exact |
+| Net GEX | net_gex | Barchart Gamma Exposure | <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | exact |
+| IV30 | iv30 | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | exact |
+| Gamma Flip | gamma_flip_point | Barchart Gamma Exposure | <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | proxy |
+| HV20 | hv20 | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | exact |
+| IV Rank | iv_rank | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | exact |
+| IV Percentile | iv_percentile | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | proxy |
+| OI Daily Delta | oi_daily_delta | Barchart Options Prices | <https://www.barchart.com/stocks/quotes/GME/options> | proxy |
+| Dealer Net Gamma | dealer_net_gamma | Barchart Gamma Exposure | <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | proxy |
+| Social Mentions | social_mention_count | ApeWisdom (Reddit tracker) | <https://apewisdom.io/stocks/GME/> | proxy |
+| Social Sentiment | social_sentiment_score | — | — | unsupported |
+| Top OI Strikes | top_oi_strike_1/2/3 | Barchart Options Prices | <https://www.barchart.com/stocks/quotes/GME/options> | exact |
+| ER Cycle Phase | er_cycle_phase | GameStop Investor Relations | <https://investor.gamestop.com/events-presentations> | unverified |
+| Days to Next ER | days_to_next_er | GameStop Investor Relations | <https://investor.gamestop.com/events-presentations> | unverified |
+| Warrant Series | warrant_series | Barchart Options Chain | <https://www.barchart.com/stocks/quotes/GME/options> | proxy |
+
+**Rejected links:**
+- **SqueezeMetrics DIX Monitor** (`squeezemetrics.com/monitor`): tracks S&P 500 market-wide GEX, not individual stock GEX. All three prior SqueezeMetrics references (net_gex, gamma_flip_point, dealer_net_gamma) replaced with Barchart Gamma Exposure.
+- **Yahoo Finance Community**: a discussion forum, not a structured data endpoint. Removed as validator for both social metrics.
+- **SwaggyStocks Max Pain** (`swaggerstocks.com`): navigation to the options page failed (execution context error on redirect). Replaced with Maximum-Pain.com which verified successfully.
+
+**Status label notes:**
+- `gamma_flip_point` and `dealer_net_gamma` are marked **proxy** because Barchart shows GEX by strike (from which the zero-crossing and net total are derivable) but may not display these derived scalars as single labeled values.
+- `iv_percentile` is **proxy** because Barchart's lookback window may differ from this mart's 252-session definition.
+- `social_sentiment_score` is **unsupported**: no free live source provides a mention-weighted average sentiment score matching this mart's −1 to +1 definition. The mart's value uses a seed fixture and is not valid for live operator comparison.
+- `er_cycle_phase` and `days_to_next_er` are **unverified** because the GameStop Investor Relations page was inaccessible to headless browser verification; the source is the official public ER calendar.
 
 ### 2.8 DQC Outputs
 
@@ -115,6 +133,40 @@ This mart serves as the canonical advanced example for the mart-forge framework,
 | Duplicate Detection | No duplicate (pull_date, option_symbol) in DWD |
 | Null-Rate | Greeks null rate < 5% in DWD |
 | Business Reconciliation | GEX vs external source (waived — no free gamma provider) |
+
+### 2.9 ER Calendar and Instrument Metadata Metrics
+
+These metrics extend the mart with publicly derivable analytics from the earnings calendar and options chain instrument metadata. They do not expose operator-specific data.
+
+#### ER Cycle Phase
+
+| Metric | Definition | Formula | Layer |
+|--------|-----------|---------|-------|
+| days_to_next_er | Calendar days until the next expected GME earnings release | `next_er_date - pull_date` | DWS |
+| er_cycle_phase | Four-phase ER cycle classification derived from `days_to_next_er` | Phase 1 (Low-IV): DTE ∈ [14, 60]; Phase 2 (Pre-ER lift): DTE ∈ [3, 13]; Phase 3 (Earnings event): DTE ∈ [0, 2]; Phase 4 (Post-ER): DTE < 0 | DWS |
+
+- `next_er_date` is loaded from a seed table (`gme_dim_er_calendar`) populated from public earnings release announcements.
+- Phase boundaries are approximate and aligned to typical options market behavior around earnings events.
+- This is a public educational metric. It does not encode operator position decisions or private trading rules.
+
+#### Warrant Series Classification
+
+| Metric | Definition | Formula | Layer |
+|--------|-----------|---------|-------|
+| warrant_series | Classification of a GME options chain contract into its instrument series | Derived from option symbol prefix: `GME` = standard option; `GMEWARB` or `GME.WS` = warrant series (Series A, strike ~$19.94, expiry Jun 2026, per public SEC filing); `GME1` = dividend warrant series (strike $32.00, expiry Oct 30 2026, per public SEC filing) | DWD |
+
+- This field enables filtering the options chain by instrument type.
+- The warrant series terms are publicly available in GameStop SEC filings (Form 8-A, Form S-1).
+- This field contains only public instrument metadata; no operator position data is included.
+
+#### Intraday Session Phase
+
+| Metric | Definition | Formula | Layer |
+|--------|-----------|---------|-------|
+| session_phase | Intraday market session block classification | `pre_market` (04:00–09:29 ET); `morning` (09:30–10:59); `midday` (11:00–13:59); `afternoon` (14:00–15:59); `after_hours` (16:00–20:00) based on `pull_ts_utc` | ODS / DWD |
+
+- This field supports session-level slicing of intraday option chain snapshots.
+- Derived purely from the pull timestamp; contains no position data.
 
 ---
 
@@ -250,3 +302,49 @@ No confidential, proprietary, or personally identifiable data is ingested, store
 | Consumer (primary user) | (community) | Framework evaluators and contributors | 2026-05-23 | approved |
 
 **Solo-operator exception:** This is an open-source example mart. The framework maintainer serves as both operator and consumer for validation purposes. The BRD is approved for use as the canonical GME options mart specification.
+
+---
+
+## Appendix A: Section 2.7 Link Verification Evidence
+
+Link verification was performed on 2026-05-23 using Playwright/Chromium 1.60.0 in headless mode. Each URL was loaded and the page title and body text were searched for the target asset (GME/GameStop) and the claimed metric. The full machine-readable report is committed at `examples/gme-options-mart/brd_link_verification.json`.
+
+### Verified (exact)
+
+| URL | Confirms |
+|-----|----------|
+| <https://finance.yahoo.com/quote/GME/> | GME stock quote — "GameStop Corp. (GME) Stock Price, News, Quote & History" |
+| <https://maximum-pain.com/options/GME> | GME Max Pain Calculator with per-expiry strikes and OI |
+| <https://www.barchart.com/stocks/quotes/GME/put-call-ratios> | "GME Put/Call Ratio for Gamestop Corp Stock — Barchart.com" |
+| <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | "GME Gamma Exposure (GEX) for Gamestop Corp Stock — Barchart.com" |
+| <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | "GME Options Volatility & Greeks for Gamestop Corp Stock — Barchart.com" |
+| <https://www.barchart.com/stocks/quotes/GME/options> | "GME Options Prices for Gamestop Corp Stock — Barchart.com" |
+
+### Verified (proxy)
+
+| URL | Asset | Proxy Limitation |
+|-----|-------|-----------------|
+| <https://apewisdom.io/stocks/GME/> | GME Reddit mentions and sentiment history | Aggregation scope differs from mart fixture |
+| <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | GEX by strike (gamma flip and dealer net gamma derivable) | Derived scalars may not be labeled as single values |
+| <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | IV percentile visible | Lookback window may differ from 252-session mart definition |
+
+### Unsupported
+
+| Metric | Reason |
+|--------|--------|
+| `social_sentiment_score` | No free live source provides a mention-weighted average sentiment score in the −1 to +1 range. Mart value uses a seed fixture and is not suitable for live comparison. |
+
+### Unverified (bot protection / inaccessible)
+
+| URL | Expected Source | Note |
+|-----|----------------|------|
+| <https://investor.gamestop.com/events-presentations> | GameStop official ER calendar | Cloudflare/bot protection in headless browser; known public source |
+| <https://marketchameleon.com/Overview/GME/IV/> | IV rank, IV percentile | Cloudflare protection blocks headless; valid public source for manual verification |
+
+### Rejected Links
+
+| Prior Reference | URL | Reason Rejected |
+|-----------------|-----|----------------|
+| SqueezeMetrics DIX Monitor | <https://squeezemetrics.com/monitor> | **Wrong asset**: tracks S&P 500 market-wide GEX only, not individual stock GEX. GME not found on page. |
+| Yahoo Finance Community | <https://finance.yahoo.com/quote/GME/community> | Not a structured data source; discussion forum only. Removed from both social metrics. |
+| SwaggyStocks Max Pain | <https://swaggerstocks.com/options.php?ticker=GME> | Navigation failed (execution context error on redirect); replaced by Maximum-Pain.com. |
