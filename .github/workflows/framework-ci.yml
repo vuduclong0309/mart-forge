@@ -1,0 +1,65 @@
+name: "Framework CI"
+
+on:
+  push:
+    branches: [main, "drook/*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: pip install -e ".[dev]"
+
+      - name: Validate framework templates
+        run: mart-forge validate
+
+      - name: Run confidentiality scan
+        run: mart-forge scan
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package with test dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run framework tests
+        run: pytest tests/ -v
+
+  wheel-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build wheel
+        run: pip install build && python -m build
+
+      - name: Install wheel
+        run: pip install dist/mart_forge-*.whl
+
+      - name: Verify installed CLI version
+        run: mart-forge --version
+
+      - name: Validate from installed wheel
+        run: mart-forge validate
+
+      - name: Scan from installed wheel
+        run: mart-forge scan
