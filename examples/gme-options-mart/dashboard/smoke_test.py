@@ -8,7 +8,7 @@ that key visualizations render nonblank.  Returns exit-code 0 on success.
 Usage:
     pip install playwright && python -m playwright install chromium
     python smoke_test.py            # default: 8599
-    python smoke_test.py --port 9000
+    python smoke_test.py --port 9000 --expect-source live
 
 Requires:  playwright, streamlit, duckdb  (see requirements.txt + playwright)
 The DuckDB warehouse must already exist (run ``dbt run --profiles-dir .``
@@ -17,6 +17,7 @@ in the mart directory first).
 
 import argparse
 import contextlib
+import re
 import socket
 import subprocess
 import sys
@@ -45,12 +46,21 @@ def _check(name: str, ok: bool, detail: str = ""):
         print(msg)
 
 
+_LOCAL_URL_RE = re.compile(
+    r'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?',
+    re.IGNORECASE,
+)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--screenshot", default="smoke_screenshot.png")
     parser.add_argument("--timeout", type=int, default=30_000,
                         help="Page-load timeout in ms")
+    parser.add_argument("--expect-source", choices=["fixture", "live", "any"],
+                        default="fixture",
+                        help="Expected source mode shown on the dashboard")
     args = parser.parse_args()
 
     port = args.port or _free_port()
@@ -94,7 +104,23 @@ def main():
                 sys.exit(1)
 
             page.wait_for_load_state("networkidle", timeout=args.timeout)
-            time.sleep(3)
+
+            # Wait for actual dashboard content instead of relying on networkidle alone
+            try:
+                page.wait_for_selector(
+                    "text=Market Summary", timeout=args.timeout, state="visible"
+                )
+            except Exception:
+                pass  # check below will catch it
+
+            try:
+                page.wait_for_selector(
+                    ".js-plotly-plot", timeout=args.timeout, state="visible"
+                )
+            except Exception:
+                pass
+
+            time.sleep(2)
 
             print("\nRunning checks …")
 
@@ -104,9 +130,26 @@ def main():
             body = page.text_content("body") or ""
             _check("has-title-text", "GME Options Dashboard" in body)
             _check("has-dqc-badge", "DQC:" in body)
-            _check("has-fixture-warning",
-                   "FIXTURE" in body or "DEMO" in body or "fixture" in body.lower(),
-                   "fixture/demo banner expected in default config")
+
+            # Source mode check based on --expect-source
+            if args.expect_source == "fixture":
+                _check("has-fixture-warning",
+                       "FIXTURE" in body or "DEMO" in body or "fixture" in body.lower(),
+                       "fixture/demo banner expected")
+            elif args.expect_source == "live":
+                _check("has-live-banner",
+                       "LIVE" in body or "DELAYED" in body,
+                       "live/delayed data banner expected")
+                _check("no-fixture-warning",
+                       "FIXTURE" not in body and "DEMO MODE" not in body,
+                       "fixture/demo banner should NOT appear in live mode")
+            else:
+                has_any = ("FIXTURE" in body or "DEMO" in body
+                           or "LIVE" in body or "DELAYED" in body
+                           or "unknown" in body.lower() or "stale" in body.lower())
+                _check("has-source-indicator", has_any,
+                       "expected some source mode indicator")
+
             _check("has-market-summary", "Market Summary" in body)
             _check("has-max-pain-section", "Max Pain" in body)
             _check("has-trend-section", "Trend Analysis" in body)
@@ -124,6 +167,19 @@ def main():
                 non_zero = box is not None and box["height"] > 50 and box["width"] > 100
                 _check(f"chart-{idx}-nonblank", non_zero,
                        f"bbox={box}")
+
+            # ── Source-link provenance guard ──────────────────────
+            links = page.query_selector_all("a[href]")
+            local_violations = []
+            for link in links:
+                href = link.get_attribute("href") or ""
+                if _LOCAL_URL_RE.search(href):
+                    text = (link.text_content() or "").strip()[:60]
+                    if href != url and not href.startswith(url):
+                        local_violations.append(f"{href} ({text})")
+            _check("no-localhost-source-links",
+                   len(local_violations) == 0,
+                   f"found local URLs in source/fact-check links: {local_violations}")
 
             page.screenshot(path=args.screenshot, full_page=True)
             print(f"\nScreenshot saved to {args.screenshot}")

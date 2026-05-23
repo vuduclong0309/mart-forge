@@ -1,129 +1,134 @@
 {
-  "verified_at": "2026-05-23T08:30:00Z",
+  "verified_at": "2026-05-23T14:45:00Z",
   "tool": "playwright/chromium 1.60.0 headless",
-  "methodology": "Each URL was loaded in headless Chromium. Page title and body text were searched for the target asset (GME/GameStop) and the claimed metric. Status: exact = asset and metric confirmed; proxy = asset confirmed, metric definition may differ; unsupported = no viable free live source; unverified = bot protection or HTTP error; wrong-asset = page shows different asset.",
-  "brd_section": "2.7",
+  "methodology": "Each URL was loaded in headless Chromium. Page title and body text were searched for the target asset (GME/GameStop) and the claimed metric. All dashboard metrics are model-derived from CBOE inputs; external links are comparator references for manual cross-verification, not data sources. ChartExchange links use ?adjustment=GME to scope to standard contract class. Status: comparator = external site shows a comparable metric for GME (our value is model-derived); unsupported = no viable free live source; unverified = bot protection or HTTP error.",
+  "brd_section": "2.8",
   "accepted": [
     {
       "card": "Spot Price",
       "metric": "spot",
+      "source_type": "source_native",
       "url": "https://finance.yahoo.com/quote/GME/",
-      "status": "exact",
+      "status": "comparator",
       "page_title": "GameStop Corp. (GME) Stock Price, News, Quote & History - Yahoo Finance",
-      "finding": "GME stock price and quote confirmed."
+      "finding": "GME stock price confirmed. Mart spot value is source_native from CBOE underlying_close; Yahoo Finance is a comparator for cross-verification."
     },
     {
       "card": "Max Pain",
       "metric": "max_pain_strike",
-      "url": "https://maximum-pain.com/options/GME",
-      "status": "exact",
-      "page_title": "GME Max Pain Calculator | Maximum-Pain.com",
-      "finding": "GME Max Pain Calculator confirmed with per-expiry strike and OI breakdown."
-    },
-    {
-      "card": "Max Pain Convergence",
-      "metric": "max_pain_convergence_pct",
-      "url": "https://maximum-pain.com/options/GME",
-      "status": "proxy",
-      "page_title": "GME Max Pain Calculator | Maximum-Pain.com",
-      "finding": "Max pain strike confirmed; convergence % is derivable but not shown as a labeled field."
+      "source_type": "derived",
+      "url": "https://chartexchange.com/symbol/nyse-gme/optionchain/summary/?adjustment=GME",
+      "status": "comparator",
+      "page_title": "ChartExchange — GME Option Chain Summary",
+      "finding": "Browser-verified 2026-05-23: standard GME Jun 18, 2026 Max Pain $22.00, matching corrected distinct-candidate calculation. ?adjustment=GME scopes to standard contract class. ChartExchange is a comparator link only; API/data-use suitability for ingestion not confirmed."
     },
     {
       "card": "P/C Ratio",
       "metric": "pc_ratio",
-      "url": "https://www.barchart.com/stocks/quotes/GME/put-call-ratios",
-      "status": "exact",
-      "page_title": "GME Put/Call Ratio for Gamestop Corp Stock - Barchart.com",
-      "finding": "GME put/call ratio for volume and open interest confirmed."
+      "source_type": "derived",
+      "url": "https://chartexchange.com/symbol/nyse-gme/optionchain/summary/?adjustment=GME",
+      "status": "comparator",
+      "page_title": "ChartExchange — GME Option Chain Summary",
+      "finding": "Browser-verified 2026-05-23: standard GME Jun 18, 2026 P/C 0.29. Mart P/C is model-derived per-expiry for standard contracts; ChartExchange shows per-expiry class-specific P/C. Comparator link only."
     },
     {
       "card": "Net GEX",
       "metric": "net_gex",
+      "source_type": "derived",
       "url": "https://www.barchart.com/stocks/quotes/GME/gamma-exposure",
-      "status": "exact",
+      "status": "comparator",
       "page_title": "GME Gamma Exposure (GEX) for Gamestop Corp Stock - Barchart.com",
-      "finding": "GME-specific GEX confirmed. Shows GAMMA EXPOSURE for May 22nd, 2026 with market-maker positioning data."
+      "finding": "GME GEX confirmed on Barchart. Mart net_gex is model-derived (gamma * OI * 100 * spot^2 * 0.01 * sign); Barchart uses their own GEX formula."
     },
     {
       "card": "IV30",
       "metric": "iv30",
+      "source_type": "derived",
       "url": "https://www.barchart.com/stocks/quotes/GME/volatility-greeks",
-      "status": "exact",
+      "status": "comparator",
       "page_title": "GME Options Volatility & Greeks for Gamestop Corp Stock - Barchart.com",
-      "finding": "GME implied volatility and greeks confirmed including near-30-DTE IV."
+      "finding": "GME IV confirmed. Mart iv30 is model-derived (OI-weighted avg for 20-40 DTE window); Barchart definition may differ."
     },
     {
       "card": "Gamma Flip",
       "metric": "gamma_flip_point",
+      "source_type": "derived",
       "url": "https://www.barchart.com/stocks/quotes/GME/gamma-exposure",
-      "status": "proxy",
+      "status": "comparator",
       "page_title": "GME Gamma Exposure (GEX) for Gamestop Corp Stock - Barchart.com",
-      "finding": "GEX by strike confirmed. Gamma flip (zero-crossing of cumulative GEX) is derivable from chart data but may not appear as a single labeled value."
+      "finding": "GEX by strike confirmed. Mart gamma_flip_point is model-derived (zero-crossing of cumulative GEX); Barchart shows raw GEX data."
     },
     {
       "card": "HV20",
       "metric": "hv20",
+      "source_type": "derived",
       "url": "https://www.barchart.com/stocks/quotes/GME/volatility-greeks",
-      "status": "exact",
+      "status": "comparator",
       "page_title": "GME Options Volatility & Greeks for Gamestop Corp Stock - Barchart.com",
-      "finding": "GME historical volatility confirmed on the Volatility & Greeks page."
+      "finding": "GME historical volatility confirmed. Mart hv20 is model-derived from Yahoo Finance closes; Barchart lookback may differ."
     },
     {
       "card": "IV Rank",
       "metric": "iv_rank",
+      "source_type": "derived",
       "url": "https://www.barchart.com/stocks/quotes/GME/volatility-greeks",
-      "status": "exact",
+      "status": "comparator",
       "page_title": "GME Options Volatility & Greeks for Gamestop Corp Stock - Barchart.com",
-      "finding": "IV Rank definition confirmed on page: current IV compared to highest and lowest values over the past 1-year."
+      "finding": "IV Rank confirmed. Mart iv_rank uses 252-session window; Barchart uses 1-year range."
     },
     {
       "card": "IV Percentile",
       "metric": "iv_percentile",
+      "source_type": "derived",
       "url": "https://www.barchart.com/stocks/quotes/GME/volatility-greeks",
-      "status": "proxy",
+      "status": "comparator",
       "page_title": "GME Options Volatility & Greeks for Gamestop Corp Stock - Barchart.com",
-      "finding": "IV Percentile visible. Barchart lookback window may differ from mart's 252-session definition."
+      "finding": "IV Percentile visible. Mart uses 252-session observation count; Barchart lookback window may differ."
     },
     {
       "card": "OI Daily Delta",
       "metric": "oi_daily_delta",
+      "source_type": "derived",
       "url": "https://www.barchart.com/stocks/quotes/GME/options",
-      "status": "proxy",
+      "status": "comparator",
       "page_title": "GME Options Prices for Gamestop Corp Stock - Barchart.com",
-      "finding": "GME options chain with per-contract OI confirmed. Day-over-day OI delta requires comparing across dates."
+      "finding": "GME options chain with per-contract OI confirmed. OI delta is model-derived via LAG."
     },
     {
       "card": "Dealer Net Gamma",
       "metric": "dealer_net_gamma",
+      "source_type": "derived",
       "url": "https://www.barchart.com/stocks/quotes/GME/gamma-exposure",
-      "status": "proxy",
+      "status": "comparator",
       "page_title": "GME Gamma Exposure (GEX) for Gamestop Corp Stock - Barchart.com",
-      "finding": "GEX confirmed. Dealer net gamma (sum across all strikes) is derivable; may not appear as a single labeled scalar."
-    },
-    {
-      "card": "Social Mentions",
-      "metric": "social_mention_count",
-      "url": "https://apewisdom.io/stocks/GME/",
-      "status": "proxy",
-      "page_title": "GME - GameStop , Reddit sentiment and mention history",
-      "finding": "GME Reddit mention count confirmed. Aggregation scope (specific subreddits) may differ from mart fixture definition."
+      "finding": "GEX confirmed. Mart dealer_net_gamma is model-derived (sum of per-contract GEX); Barchart shows their own aggregate."
     },
     {
       "card": "Top OI Strikes",
       "metric": "top_oi_strike_1/2/3",
+      "source_type": "derived",
       "url": "https://www.barchart.com/stocks/quotes/GME/options",
-      "status": "exact",
+      "status": "comparator",
       "page_title": "GME Options Prices for Gamestop Corp Stock - Barchart.com",
-      "finding": "GME options chain with sortable OI per strike confirmed."
+      "finding": "GME options chain with sortable OI per strike confirmed. Mart top OI strikes are model-derived rankings."
     }
   ],
   "unsupported": [
     {
-      "card": "Social Sentiment",
-      "metric": "social_sentiment_score",
+      "card": "Social Mentions",
+      "metric": "social_mention_count",
+      "source_type": "unsupported",
       "url": null,
       "status": "unsupported",
-      "finding": "No free live source provides a mention-weighted average sentiment score in the -1 to +1 range matching this mart's definition. Mart value uses a seed fixture for CI only and is not valid for live operator comparison."
+      "finding": "No free live source matches this mart's aggregation definition. Seed fixture for CI only."
+    },
+    {
+      "card": "Social Sentiment",
+      "metric": "social_sentiment_score",
+      "source_type": "unsupported",
+      "url": null,
+      "status": "unsupported",
+      "finding": "No free live source provides a mention-weighted average sentiment score in the -1 to +1 range matching this mart's definition. Seed fixture for CI only."
     }
   ],
   "unverified": [
@@ -133,40 +138,53 @@
       "url": "https://investor.gamestop.com/events-presentations",
       "status": "unverified",
       "finding": "GameStop Investor Relations inaccessible to headless browser. Official public source for GME earnings dates; dates also published in SEC 8-K/10-Q filings on EDGAR."
-    },
-    {
-      "card": "IV30/HV20/IV Rank (MarketChameleon)",
-      "metric": "iv30, hv20, iv_rank",
-      "url": "https://marketchameleon.com/Overview/GME/IV/",
-      "status": "unverified",
-      "finding": "Cloudflare bot-protection in headless browser. Known public source; manual verification shows IV data for GME. Primary reference replaced with Barchart Volatility & Greeks (verified exact)."
     }
   ],
   "rejected": [
     {
       "original_reference": "SqueezeMetrics DIX Monitor",
       "url": "https://squeezemetrics.com/monitor",
-      "rejection_reason": "wrong-asset: SqueezeMetrics DIX/GEX tracks S&P 500 market-wide gamma exposure only. Page title confirms 'sqzme | Fresh perspectives on stock data' with no GME-specific content. All three prior SqueezeMetrics references (net_gex, gamma_flip_point, dealer_net_gamma) replaced with Barchart Gamma Exposure."
+      "rejection_reason": "wrong-asset: SqueezeMetrics DIX/GEX tracks S&P 500 market-wide gamma exposure only."
     },
     {
-      "original_reference": "Yahoo Finance Community (social_mention_count)",
+      "original_reference": "Yahoo Finance Community (social metrics)",
       "url": "https://finance.yahoo.com/quote/GME/community",
-      "rejection_reason": "Discussion forum, not a machine-readable or structured data endpoint for social mention counts."
-    },
-    {
-      "original_reference": "Yahoo Finance Community (social_sentiment_score)",
-      "url": "https://finance.yahoo.com/quote/GME/community",
-      "rejection_reason": "Discussion forum. Cannot provide a mention-weighted average sentiment score. Metric marked unsupported."
+      "rejection_reason": "Discussion forum, not a structured data endpoint."
     },
     {
       "original_reference": "SwaggyStocks Max Pain",
       "url": "https://swaggerstocks.com/options.php?ticker=GME",
-      "rejection_reason": "Navigation failed: execution context destroyed on redirect. Replaced by maximum-pain.com (verified exact)."
+      "rejection_reason": "Navigation failed: execution context destroyed on redirect."
     },
     {
       "original_reference": "QuiverQuant WallStreetBets",
       "url": "https://www.quiverquant.com/wallstreetbets/?ticker=GME",
       "rejection_reason": "wrong-asset: page shows SPY/S&P 500 content by default, not GME."
+    },
+    {
+      "original_reference": "ApeWisdom (social_mention_count)",
+      "url": "https://apewisdom.io/stocks/GME/",
+      "rejection_reason": "Aggregation scope differs from mart fixture definition. Social metrics reclassified as unsupported."
+    },
+    {
+      "original_reference": "Maximum-Pain.com (max_pain_strike)",
+      "url": "https://maximum-pain.com/options/GME",
+      "rejection_reason": "Replaced by ChartExchange which supports adjustment-specific routes (?adjustment=GME for standard class). Maximum-Pain.com does not distinguish standard vs adjusted contract class."
+    },
+    {
+      "original_reference": "Market Chameleon IV (iv30, hv20, iv_rank)",
+      "url": "https://marketchameleon.com/Overview/GME/IV/",
+      "rejection_reason": "ERR_HTTP2_PROTOCOL_ERROR in Playwright 2026-05-23. Cannot be represented as browser-verified. Primary IV comparator is Barchart Volatility & Greeks."
+    },
+    {
+      "original_reference": "Barchart options-overview",
+      "url": "https://www.barchart.com/stocks/quotes/GME/options-overview",
+      "rejection_reason": "CloudFront 403 ERROR in Playwright 2026-05-23. Other Barchart sub-pages (gamma-exposure, volatility-greeks, put-call-ratios, options) remain accessible."
+    },
+    {
+      "original_reference": "Barchart Put/Call Ratios (pc_ratio)",
+      "url": "https://www.barchart.com/stocks/quotes/GME/put-call-ratios",
+      "rejection_reason": "Replaced by ChartExchange which shows per-expiry, per-contract-class P/C matching mart scoping. Barchart P/C page was previously verified but ChartExchange provides a contract-class-scoped comparator."
     }
   ]
 }

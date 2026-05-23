@@ -99,6 +99,13 @@ models:
           - accepted_values:
               arguments:
                 values: ["WEEKLY", "MONTHLY", "LEAP"]
+      - name: contract_class
+        description: "standard = standard OCC symbol (root matches ticker); adjusted = non-standard root (e.g. GME1 for dividend warrants)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["standard", "adjusted"]
 
   # --- DWS Layer ---
   - name: gme_dws_strike_gex_1d
@@ -117,8 +124,41 @@ models:
         data_tests:
           - not_null
 
+  - name: gme_dws_max_pain_by_expiry_1d
+    description: >
+      Per-expiry, per-contract-class max pain calculation using distinct strike candidates.
+      Grain: one row per (pull_date, ticker, expiry, contract_class).
+      Fixes the prior all-expiry/mixed-class calculation that over-counted strikes with
+      multiple contracts.
+    columns:
+      - name: pull_date
+        data_tests:
+          - not_null
+      - name: ticker
+        data_tests:
+          - not_null
+      - name: expiry
+        description: "Option expiration date for this max pain calculation."
+        data_tests:
+          - not_null
+      - name: contract_class
+        description: "standard or adjusted — max pain calculated separately per class."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["standard", "adjusted"]
+      - name: max_pain_strike
+        description: "Strike minimizing total exercise value for this expiry and contract class."
+        data_tests:
+          - not_null
+      - name: min_total_pain
+        description: "Total pain at the max pain strike."
+        data_tests:
+          - not_null
+
   - name: gme_dws_daily_snapshot_1d
-    description: "Daily market summary: spot, GEX, max pain, P/C ratio, top OI strikes. Grain: one row per day."
+    description: "Daily market summary: spot, GEX, max pain (nearest standard expiry), P/C ratio (standard class, same expiry), top OI strikes. Grain: one row per day."
     columns:
       - name: pull_date
         data_tests:
@@ -128,8 +168,11 @@ models:
         data_tests:
           - not_null
       - name: pc_ratio
+        description: "Put/Call OI ratio for standard contracts on the nearest standard expiry."
         data_tests:
           - not_null
+      - name: pc_ratio_expiry
+        description: "Expiry date used for the P/C ratio calculation (same as max_pain_expiry)."
 
   - name: gme_dws_options_metrics_1d
     description: >
@@ -305,6 +348,7 @@ models:
     description: >
       One-big-table combining daily snapshot and Phase-1 options metrics
       with calendar attributes for dashboard consumption. Grain: one row per day.
+      Max pain is for the nearest standard-class expiry only.
     columns:
       - name: pull_date
         data_tests:
@@ -320,6 +364,10 @@ models:
       - name: ticker
         data_tests:
           - not_null
+      - name: max_pain_expiry
+        description: "Expiry date for the headline max pain value (nearest standard-class expiry)."
+      - name: pc_ratio_expiry
+        description: "Expiry date used for the headline P/C ratio (same nearest standard expiry as max pain)."
       - name: gamma_flip_point
         description: "Strike where cumulative net GEX crosses zero."
         data_tests:
@@ -356,3 +404,32 @@ models:
         description: "30-day trailing average put/call ratio."
       - name: observation_count_30d
         description: "Number of observations in the 30-day trailing window."
+
+  - name: gme_ads_warehouse_metadata
+    description: >
+      Build-time metadata capturing the actual source mode, provider label,
+      and provider URL used during the dbt run. The dashboard reads this table
+      to determine fixture vs live mode instead of inspecting dbt_project.yml.
+      Grain: single row.
+    columns:
+      - name: source_mode
+        description: "'fixture' or 'live' — set at dbt-build time from use_fixture var."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["fixture", "live"]
+      - name: primary_source_label
+        description: "Human-readable label for the data source."
+        data_tests:
+          - not_null
+      - name: primary_source_url
+        description: "External URL of the primary data provider. NULL in fixture mode."
+      - name: data_as_of_date
+        description: "Latest pull_date in the ODS layer."
+        data_tests:
+          - not_null
+      - name: warehouse_built_at_utc
+        description: "Latest pull_ts_utc from ODS — proxy for build time."
+        data_tests:
+          - not_null

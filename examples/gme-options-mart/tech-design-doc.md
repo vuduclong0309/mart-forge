@@ -1,6 +1,6 @@
 # Tech Design Document: GME Options Mart
 
-> Version 1.0 — Open-source example for the mart-forge framework.
+> Version 1.2 — Open-source example for the mart-forge framework.
 
 ---
 
@@ -10,6 +10,7 @@
 |---------|-------------|------|--------|
 | V1.0 | Initial TDD authored from final built mart (post DATA-01/02/03) | 2026-05-23 | mart-forge maintainers |
 | V1.1 | Add DWS market trends (7d/30d trailing-window aggregations) | 2026-05-23 | DROOK-OPUS (ITER2-09) |
+| V1.2 | Right-anchored OCC parsing, contract_class, per-expiry max pain model, standard-class P/C ratio, updated traceability | 2026-05-23 | DROOK-OPUS (ITER2-11) |
 
 ---
 
@@ -35,10 +36,10 @@ Metrics are organized by analytical category. Each metric traces to a specific S
 - **Gamma flip point**: Linear interpolation of the strike where cumulative net GEX crosses zero
 
 ### Pain & Positioning Metrics
-- **Max pain strike**: Cross-join strike candidates; select strike with `MIN(SUM(ITM exercise pain))`
+- **Max pain strike**: Per-expiry, per-contract-class; DISTINCT strike candidates cross-joined against contracts; select strike with `MIN(SUM(ITM exercise pain))`. Dashboard shows nearest standard-class expiry.
 - **Max pain convergence %**: `ABS(spot - max_pain_strike) / spot * 100`
-- **P/C ratio**: `SUM(put_OI) / SUM(call_OI)`
-- **Top OI strikes (1/2/3)**: Strikes ranked by `SUM(open_interest) DESC`
+- **P/C ratio**: `SUM(put_OI) / SUM(call_OI)` — scoped to standard contract class, same expiry as max pain
+- **Top OI strikes (1/2/3)**: Strikes ranked by `SUM(open_interest) DESC` — scoped to standard class, same expiry as max pain
 
 ### Volatility Metrics
 - **IV30**: OI-weighted IV for contracts with DTE ∈ [20, 40]: `SUM(IV * OI) / SUM(OI)`
@@ -111,6 +112,7 @@ Facts fall into two categories:
 | Contract-level fact | not applicable | not applicable | gme_dwd_option_contract_di | not applicable | not applicable | pull_date, option_symbol, strike, expiry, option_type, ticker |
 | Calendar | not applicable | gme_dim_date | not applicable | not applicable | not applicable | date_key, full_date |
 | Strike-level GEX aggregation | not applicable | not applicable | not applicable | gme_dws_strike_gex_1d | not applicable | pull_date, ticker, strike, expiry |
+| Per-expiry max pain | not applicable | not applicable | not applicable | gme_dws_max_pain_by_expiry_1d | not applicable | pull_date, ticker, expiry, contract_class |
 | Daily market snapshot | not applicable | not applicable | not applicable | gme_dws_daily_snapshot_1d | not applicable | pull_date, ticker |
 | Phase-1 options metrics | not applicable | not applicable | not applicable | gme_dws_options_metrics_1d | not applicable | pull_date, ticker |
 | Social sentiment daily | not applicable | not applicable | not applicable | gme_dws_social_sentiment_1d | not applicable | pull_date, ticker |
@@ -147,6 +149,8 @@ Facts fall into two categories:
 │  ┌────────────────┐  ┌───────┴────────┐  ┌──────────────────────────┐  │
 │  │ strike_gex_1d  │  │ snapshot_1d    │  │ options_metrics_1d       │  │
 │  │ (per-strike)   │  │ (per-day)      │  │ (per-day)                │  │
+│  │                │  │  ▲ max_pain_   │  │                          │  │
+│  │                │  │  by_expiry_1d  │  │                          │  │
 │  └───────┬────────┘  └───────┬────────┘  └─────────┬────────────────┘  │
 │          │                   │                      │                   │
 │          │            ┌──────┴──────┐       ┌───────┴──────────────┐   │
@@ -227,9 +231,9 @@ Facts fall into two categories:
 | last_trade_time | VARCHAR | Time of the last trade | 15:45:00 | `elem['last_trade_time']` | CBOE options[].last_trade_time |
 | percent_change | DOUBLE | Percentage price change | 7.46 | `CAST(elem['percent_change'] AS DOUBLE)` | CBOE options[].percent_change |
 | prev_day_close | DOUBLE | Previous day closing price | 3.35 | `CAST(elem['prev_day_close'] AS DOUBLE)` | CBOE options[].prev_day_close |
-| expiry | DATE | Option expiration date (parsed from OCC symbol) | 2026-06-20 | `TRY_CAST('20' \|\| SUBSTRING(CAST(elem['option'] AS VARCHAR), 4, 2) \|\| '-' \|\| SUBSTRING(CAST(elem['option'] AS VARCHAR), 6, 2) \|\| '-' \|\| SUBSTRING(CAST(elem['option'] AS VARCHAR), 8, 2) AS DATE)` | Derived from option_symbol |
-| option_type | VARCHAR | Call or put (parsed from OCC symbol) | call | `CASE WHEN SUBSTRING(CAST(elem['option'] AS VARCHAR), 10, 1) = 'C' THEN 'call' ELSE 'put' END` | Derived from option_symbol |
-| strike | DOUBLE | Strike price (parsed from OCC symbol, 8-digit / 1000) | 25.0 | `TRY_CAST(SUBSTRING(CAST(elem['option'] AS VARCHAR), 11) AS DOUBLE) / 1000.0` | Derived from option_symbol |
+| expiry | DATE | Option expiration date (right-anchored OCC parse) | 2026-06-20 | `TRY_CAST('20' \|\| SUBSTRING(sym, LENGTH(sym) - 14, 2) \|\| '-' \|\| SUBSTRING(sym, LENGTH(sym) - 12, 2) \|\| '-' \|\| SUBSTRING(sym, LENGTH(sym) - 10, 2) AS DATE)` | Derived from option_symbol |
+| option_type | VARCHAR | Call or put (right-anchored OCC parse) | call | `CASE WHEN SUBSTRING(sym, LENGTH(sym) - 8, 1) = 'C' THEN 'call' ELSE 'put' END` | Derived from option_symbol |
+| strike | DOUBLE | Strike price (right-anchored: last 8 digits / 1000) | 25.0 | `TRY_CAST(RIGHT(sym, 8) AS DOUBLE) / 1000.0` | Derived from option_symbol |
 | underlying_close | DOUBLE | Underlying GME closing price | 28.50 *(fixture)* | `data.close` from top-level JSON | CBOE data.close |
 | cboe_timestamp | VARCHAR | Raw CBOE timestamp string | 2026-05-20T20:45:00-04:00 | `"timestamp"` from top-level JSON | CBOE timestamp |
 
@@ -297,6 +301,7 @@ Facts fall into two categories:
 | spot | DOUBLE | Underlying close price | 28.50 *(fixture)* | `ods.underlying_close` | gme_ods_cboe_options_chain |
 | gex_contribution | DOUBLE | Per-contract gamma exposure ($) | 12345.67 | `COALESCE(gamma, 0) * COALESCE(open_interest, 0) * 100 * POWER(underlying_close, 2) * 0.01 * CASE WHEN option_type = 'call' THEN 1 ELSE -1 END` | Derived from ODS gamma, OI, underlying_close, option_type |
 | series_type | VARCHAR | Option series classification | MONTHLY | `CASE WHEN DTE > 365 THEN 'LEAP' WHEN DTE <= 7 THEN 'WEEKLY' ELSE 'MONTHLY' END` | Derived from DTE |
+| contract_class | VARCHAR | Standard (`GME`) or adjusted (`GME1`, etc.) contract class | standard | `CASE WHEN LENGTH(option_symbol) <= LENGTH(ticker) + 15 THEN 'standard' ELSE 'adjusted' END` | Derived from option_symbol length |
 | provider | VARCHAR | Data provider | cboe | `ods.provider` | gme_ods_cboe_options_chain |
 | pull_ts_utc | TIMESTAMP | Pull timestamp | 2026-05-20 20:45:00 | `ods.pull_ts_utc` | gme_ods_cboe_options_chain |
 | cboe_timestamp | VARCHAR | Raw CBOE timestamp | 2026-05-20T20:45:00-04:00 | `ods.cboe_timestamp` | gme_ods_cboe_options_chain |
@@ -326,24 +331,46 @@ Facts fall into two categories:
 | avg_iv | DOUBLE | Average implied volatility at this strike | 0.82 | `AVG(implied_vol)` | gme_dwd_option_contract_di |
 | gex_rank | INTEGER | Rank by absolute net GEX within the day (1 = highest) | 3 | `ROW_NUMBER() OVER (PARTITION BY pull_date, ticker ORDER BY ABS(SUM(gex_contribution)) DESC)` | Derived |
 
+#### gme_dws_max_pain_by_expiry_1d
+
+- **Materialization:** Table
+- **Grain:** One row per (pull_date, ticker, expiry, contract_class)
+- **Refresh frequency:** Daily
+- **Source:** `gme_dwd_option_contract_di`
+- **Algorithm:** DISTINCT strike candidates cross-joined against contracts within the same (pull_date, ticker, expiry, contract_class) partition. Fixes the prior all-expiry/mixed-class calculation that over-counted strikes with multiple contracts.
+
+| column_name | data_type | definition | example_value | calculation | data_source |
+|-------------|-----------|-----------|---------------|-------------|-------------|
+| pull_date | DATE | Pull date | 2026-05-20 | `pull_date` from DWD | gme_dwd_option_contract_di |
+| ticker | VARCHAR | Underlying ticker | GME | `ticker` from DWD | gme_dwd_option_contract_di |
+| expiry | DATE | Option expiration date | 2026-06-20 | `expiry` from DWD | gme_dwd_option_contract_di |
+| contract_class | VARCHAR | Standard or adjusted | standard | `contract_class` from DWD | gme_dwd_option_contract_di |
+| max_pain_strike | DOUBLE | Strike minimizing total exercise pain for this expiry/class | 25.00 | `QUALIFY ROW_NUMBER() OVER (PARTITION BY pull_date, ticker, expiry, contract_class ORDER BY total_pain ASC) = 1` | gme_dwd_option_contract_di |
+| min_total_pain | DOUBLE | Total pain at the max pain strike | 1250000.00 | Sum of ITM exercise values at the winning candidate | gme_dwd_option_contract_di |
+
 #### gme_dws_daily_snapshot_1d
 
 - **Materialization:** Table
 - **Grain:** One row per day
 - **Refresh frequency:** Daily
-- **Sources:** `gme_dwd_option_contract_di`, `gme_dws_strike_gex_1d`
+- **Sources:** `gme_dwd_option_contract_di`, `gme_dws_strike_gex_1d`, `gme_dws_max_pain_by_expiry_1d`
+- **Max pain source:** Joins `gme_dws_max_pain_by_expiry_1d` filtered to `contract_class = 'standard'`, taking the nearest expiry per day via `ROW_NUMBER() OVER (ORDER BY expiry ASC) = 1`.
+- **P/C ratio scope:** Standard contract class only, scoped to the same nearest standard expiry as max pain.
+- **Top OI scope:** Standard contract class only, scoped to the same nearest standard expiry as max pain.
 
 | column_name | data_type | definition | example_value | calculation | data_source |
 |-------------|-----------|-----------|---------------|-------------|-------------|
 | pull_date | DATE | Pull date | 2026-05-20 | `DISTINCT pull_date` from DWD | gme_dwd_option_contract_di |
 | ticker | VARCHAR | Underlying ticker | GME | From DWD | gme_dwd_option_contract_di |
 | spot | DOUBLE | Underlying close price | 28.50 *(fixture)* | `DISTINCT spot` from DWD | gme_dwd_option_contract_di |
-| max_pain_strike | DOUBLE | Strike minimizing total exercise pain | 27.00 | Cross-join DWD contracts; for each candidate strike, `SUM(CASE WHEN c2.option_type = 'call' AND c2.strike < c1.strike THEN (c1.strike - c2.strike) * c2.open_interest * 100 WHEN c2.option_type = 'put' AND c2.strike > c1.strike THEN (c2.strike - c1.strike) * c2.open_interest * 100 ELSE 0 END)`; select candidate with `MIN(total_pain)` via `QUALIFY ROW_NUMBER() OVER (ORDER BY total_pain ASC) = 1` | gme_dwd_option_contract_di |
-| max_pain_convergence_pct | DOUBLE | Spot-to-max-pain distance as % | 5.26 | `ROUND(ABS(spot - max_pain_strike) / spot * 100, 2)` | Derived from spot and max_pain_strike |
+| max_pain_strike | DOUBLE | Strike minimizing total exercise pain (nearest standard expiry) | 25.00 | From `gme_dws_max_pain_by_expiry_1d` WHERE `contract_class = 'standard'`, nearest expiry | gme_dws_max_pain_by_expiry_1d |
+| max_pain_expiry | DATE | Expiry date for the headline max pain value | 2026-06-20 | Nearest standard-class expiry from max pain model | gme_dws_max_pain_by_expiry_1d |
+| max_pain_convergence_pct | DOUBLE | Spot-to-max-pain distance as % | 12.28 | `ROUND(ABS(spot - max_pain_strike) / spot * 100, 2)` | Derived from spot and max_pain_strike |
 | net_gex | DOUBLE | Total net GEX across all strikes | 150000.00 | `SUM(net_gex)` from strike_gex_1d | gme_dws_strike_gex_1d |
 | top_gex_strike | DOUBLE | Strike with highest absolute net GEX | 30.00 | `SELECT strike FROM strike_gex_1d ORDER BY ABS(net_gex) DESC LIMIT 1` | gme_dws_strike_gex_1d |
-| pc_ratio | DOUBLE | Put/call open interest ratio | 0.85 | `SUM(CASE WHEN option_type = 'put' THEN open_interest ELSE 0 END) * 1.0 / NULLIF(SUM(CASE WHEN option_type = 'call' THEN open_interest ELSE 0 END), 0)` | gme_dwd_option_contract_di |
-| top_oi_strike_1 | DOUBLE | Strike with highest total OI | 30.00 | `SUM(open_interest) GROUP BY strike`, ranked `ROW_NUMBER() ORDER BY open_interest DESC`, `oi_rank = 1` | gme_dwd_option_contract_di |
+| pc_ratio | DOUBLE | Put/call OI ratio (standard class, nearest expiry) | 0.53 | `SUM(put_OI) / SUM(call_OI)` WHERE `contract_class = 'standard' AND expiry = max_pain_expiry` | gme_dwd_option_contract_di |
+| pc_ratio_expiry | DATE | Expiry date used for P/C ratio (same as max_pain_expiry) | 2026-06-20 | Same nearest standard expiry as max pain | gme_dws_max_pain_by_expiry_1d |
+| top_oi_strike_1 | DOUBLE | Strike with highest total OI (standard, nearest expiry) | 30.00 | `SUM(OI) GROUP BY strike` WHERE `contract_class = 'standard' AND expiry = max_pain_expiry`, `oi_rank = 1` | gme_dwd_option_contract_di |
 | top_oi_strike_2 | DOUBLE | Strike with 2nd highest total OI | 25.00 | Same as above, `oi_rank = 2` | gme_dwd_option_contract_di |
 | top_oi_strike_3 | DOUBLE | Strike with 3rd highest total OI | 35.00 | Same as above, `oi_rank = 3` | gme_dwd_option_contract_di |
 
@@ -449,11 +476,13 @@ Facts fall into two categories:
 | month_name | VARCHAR | Month name | May | `d.month_name` | gme_dim_date |
 | day_name | VARCHAR | Day name | Wednesday | `d.day_name` | gme_dim_date |
 | is_trading_day | BOOLEAN | Whether markets were open | true | `d.is_trading_day` | gme_dim_date |
-| max_pain_strike | DOUBLE | Max pain strike | 27.00 | `sn.max_pain_strike` | gme_dws_daily_snapshot_1d |
-| max_pain_convergence_pct | DOUBLE | Spot-to-max-pain distance % | 5.26 | `sn.max_pain_convergence_pct` | gme_dws_daily_snapshot_1d |
+| max_pain_strike | DOUBLE | Max pain strike (nearest standard expiry) | 25.00 | `sn.max_pain_strike` | gme_dws_daily_snapshot_1d |
+| max_pain_expiry | DATE | Expiry for the headline max pain value | 2026-06-20 | `sn.max_pain_expiry` | gme_dws_daily_snapshot_1d |
+| max_pain_convergence_pct | DOUBLE | Spot-to-max-pain distance % | 12.28 | `sn.max_pain_convergence_pct` | gme_dws_daily_snapshot_1d |
 | net_gex | DOUBLE | Total net GEX | 150000.00 | `sn.net_gex` | gme_dws_daily_snapshot_1d |
 | top_gex_strike | DOUBLE | Strike with highest absolute GEX | 30.00 | `sn.top_gex_strike` | gme_dws_daily_snapshot_1d |
-| pc_ratio | DOUBLE | Put/call OI ratio | 0.85 | `sn.pc_ratio` | gme_dws_daily_snapshot_1d |
+| pc_ratio | DOUBLE | Put/call OI ratio (standard class, nearest expiry) | 0.53 | `sn.pc_ratio` | gme_dws_daily_snapshot_1d |
+| pc_ratio_expiry | DATE | Expiry for the headline P/C ratio | 2026-06-20 | `sn.pc_ratio_expiry` | gme_dws_daily_snapshot_1d |
 | top_oi_strike_1 | DOUBLE | Highest OI strike | 30.00 | `sn.top_oi_strike_1` | gme_dws_daily_snapshot_1d |
 | top_oi_strike_2 | DOUBLE | 2nd highest OI strike | 25.00 | `sn.top_oi_strike_2` | gme_dws_daily_snapshot_1d |
 | top_oi_strike_3 | DOUBLE | 3rd highest OI strike | 35.00 | `sn.top_oi_strike_3` | gme_dws_daily_snapshot_1d |
@@ -522,7 +551,7 @@ Facts fall into two categories:
 | source | VARCHAR | Aggregated social source label | social_aggregate | `source` | gme_social_sentiment.csv |
 | mention_count | INTEGER | Number of mentions | 1567 | `mention_count` | gme_social_sentiment.csv |
 | sentiment_score | DOUBLE | Sentiment score (−1 to +1) | 0.21 | `sentiment_score` | gme_social_sentiment.csv |
-| source_url | VARCHAR | Public reference URL for the aggregate | https://finance.yahoo.com/quote/GME/community | `source_url` | gme_social_sentiment.csv |
+| source_url | VARCHAR | Public reference URL for the aggregate (fixture placeholder) | — | `source_url` | gme_social_sentiment.csv (fixture only; no live source — see BRD §2.7 unsupported classification) |
 
 ---
 
@@ -673,10 +702,12 @@ Every column in `gme_ads_market_dashboard` traces to exactly one DWS model or di
 | day_name | gme_dim_date | day_name |
 | is_trading_day | gme_dim_date | is_trading_day |
 | max_pain_strike | gme_dws_daily_snapshot_1d | max_pain_strike |
+| max_pain_expiry | gme_dws_daily_snapshot_1d | max_pain_expiry |
 | max_pain_convergence_pct | gme_dws_daily_snapshot_1d | max_pain_convergence_pct |
 | net_gex | gme_dws_daily_snapshot_1d | net_gex |
 | top_gex_strike | gme_dws_daily_snapshot_1d | top_gex_strike |
 | pc_ratio | gme_dws_daily_snapshot_1d | pc_ratio |
+| pc_ratio_expiry | gme_dws_daily_snapshot_1d | pc_ratio_expiry |
 | top_oi_strike_1 | gme_dws_daily_snapshot_1d | top_oi_strike_1 |
 | top_oi_strike_2 | gme_dws_daily_snapshot_1d | top_oi_strike_2 |
 | top_oi_strike_3 | gme_dws_daily_snapshot_1d | top_oi_strike_3 |
@@ -719,10 +750,12 @@ Every column in `gme_ads_market_dashboard` traces to exactly one DWS model or di
 | gex_rank | 6.4 DWS strike_gex | models/dws/gme_dws_strike_gex_1d.sql | schema.yml: not_null |
 | net_gex (total) | 6.4 DWS snapshot | models/dws/gme_dws_daily_snapshot_1d.sql | Aggregated from tested source |
 | top_gex_strike | 6.4 DWS snapshot | models/dws/gme_dws_daily_snapshot_1d.sql | Covered by DWS source tests and ADS dashboard review |
-| max_pain_strike | 6.4 DWS snapshot | models/dws/gme_dws_daily_snapshot_1d.sql | Covered by DWS source tests and public fact-check link |
-| max_pain_convergence_pct | 6.4 DWS snapshot | models/dws/gme_dws_daily_snapshot_1d.sql | Covered by DWS source tests and ADS dashboard review |
-| pc_ratio | 6.4 DWS snapshot | models/dws/gme_dws_daily_snapshot_1d.sql | schema.yml: not_null; test_dqc_accepted_ranges |
-| top_oi_strike_1/2/3 | 6.4 DWS snapshot | models/dws/gme_dws_daily_snapshot_1d.sql | Covered by DWS source tests and public fact-check link |
+| max_pain_strike | 6.4 DWS max_pain_by_expiry | models/dws/gme_dws_max_pain_by_expiry_1d.sql → snapshot via JOIN | schema.yml: not_null on max_pain_strike; test_max_pain_no_mixed_class |
+| max_pain_expiry | 6.4 DWS max_pain_by_expiry | models/dws/gme_dws_max_pain_by_expiry_1d.sql → snapshot via JOIN | schema.yml on ADS |
+| max_pain_convergence_pct | 6.4 DWS snapshot | models/dws/gme_dws_daily_snapshot_1d.sql | Derived from spot and max_pain_strike |
+| pc_ratio | 6.4 DWS snapshot | models/dws/gme_dws_daily_snapshot_1d.sql | schema.yml: not_null; test_dqc_accepted_ranges; scoped to standard class + nearest expiry |
+| pc_ratio_expiry | 6.4 DWS snapshot | models/dws/gme_dws_daily_snapshot_1d.sql | Same expiry as max_pain_expiry |
+| top_oi_strike_1/2/3 | 6.4 DWS snapshot | models/dws/gme_dws_daily_snapshot_1d.sql | Scoped to standard class + nearest expiry |
 | gamma_flip_point | 6.4 DWS metrics | models/dws/gme_dws_options_metrics_1d.sql | schema.yml: not_null (ADS) |
 | iv30 | 6.4 DWS metrics | models/dws/gme_dws_options_metrics_1d.sql | schema.yml: not_null (ADS) |
 | hv20 | 6.4 DWS metrics | models/dws/gme_dws_options_metrics_1d.sql | Covered by DWS source tests and ADS dashboard review |

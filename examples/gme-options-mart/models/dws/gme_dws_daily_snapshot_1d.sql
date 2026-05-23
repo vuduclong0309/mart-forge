@@ -11,37 +11,29 @@ WITH gex_agg AS (
 ),
 
 max_pain AS (
-    WITH pain_calc AS (
-        SELECT
-            c1.pull_date,
-            c1.ticker,
-            c1.strike AS candidate,
-            SUM(CASE
-                WHEN c2.option_type = 'call' AND c2.strike < c1.strike
-                THEN (c1.strike - c2.strike) * c2.open_interest * 100
-                WHEN c2.option_type = 'put' AND c2.strike > c1.strike
-                THEN (c2.strike - c1.strike) * c2.open_interest * 100
-                ELSE 0
-            END) AS total_pain
-        FROM {{ ref('gme_dwd_option_contract_di') }} c1
-        CROSS JOIN {{ ref('gme_dwd_option_contract_di') }} c2
-        WHERE c1.pull_date = c2.pull_date AND c1.ticker = c2.ticker
-        GROUP BY c1.pull_date, c1.ticker, c1.strike
-    )
-    SELECT pull_date, ticker, candidate AS max_pain_strike
-    FROM pain_calc
-    QUALIFY ROW_NUMBER() OVER (PARTITION BY pull_date, ticker ORDER BY total_pain ASC) = 1
+    SELECT pull_date, ticker, max_pain_strike, expiry AS max_pain_expiry
+    FROM {{ ref('gme_dws_max_pain_by_expiry_1d') }}
+    WHERE contract_class = 'standard'
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY pull_date, ticker
+        ORDER BY expiry ASC
+    ) = 1
 ),
 
 pc_ratio AS (
     SELECT
-        pull_date,
-        ticker,
-        SUM(CASE WHEN option_type = 'put' THEN open_interest ELSE 0 END) * 1.0
-        / NULLIF(SUM(CASE WHEN option_type = 'call' THEN open_interest ELSE 0 END), 0)
-                                                                    AS pc_ratio
-    FROM {{ ref('gme_dwd_option_contract_di') }}
-    GROUP BY pull_date, ticker
+        c.pull_date,
+        c.ticker,
+        SUM(CASE WHEN c.option_type = 'put' THEN c.open_interest ELSE 0 END) * 1.0
+        / NULLIF(SUM(CASE WHEN c.option_type = 'call' THEN c.open_interest ELSE 0 END), 0)
+                                                                    AS pc_ratio,
+        mp_ref.max_pain_expiry                                      AS pc_ratio_expiry
+    FROM {{ ref('gme_dwd_option_contract_di') }} c
+    INNER JOIN max_pain mp_ref
+        ON c.pull_date = mp_ref.pull_date AND c.ticker = mp_ref.ticker
+    WHERE c.contract_class = 'standard'
+      AND c.expiry = mp_ref.max_pain_expiry
+    GROUP BY c.pull_date, c.ticker, mp_ref.max_pain_expiry
 ),
 
 top_oi AS (
@@ -49,9 +41,13 @@ top_oi AS (
         pull_date, ticker, strike, open_interest,
         ROW_NUMBER() OVER (PARTITION BY pull_date, ticker ORDER BY open_interest DESC) AS oi_rank
     FROM (
-        SELECT pull_date, ticker, strike, SUM(open_interest) AS open_interest
-        FROM {{ ref('gme_dwd_option_contract_di') }}
-        GROUP BY pull_date, ticker, strike
+        SELECT c.pull_date, c.ticker, c.strike, SUM(c.open_interest) AS open_interest
+        FROM {{ ref('gme_dwd_option_contract_di') }} c
+        INNER JOIN max_pain mp_ref
+            ON c.pull_date = mp_ref.pull_date AND c.ticker = mp_ref.ticker
+        WHERE c.contract_class = 'standard'
+          AND c.expiry = mp_ref.max_pain_expiry
+        GROUP BY c.pull_date, c.ticker, c.strike
     )
 ),
 
@@ -66,12 +62,14 @@ SELECT
     s.spot,
 
     mp.max_pain_strike,
+    mp.max_pain_expiry,
     ROUND(ABS(s.spot - mp.max_pain_strike) / s.spot * 100, 2)      AS max_pain_convergence_pct,
 
     ga.net_gex,
     ga.top_gex_strike,
 
     pc.pc_ratio,
+    pc.pc_ratio_expiry,
 
     (SELECT strike FROM top_oi WHERE pull_date = s.pull_date
      AND ticker = s.ticker AND oi_rank = 1)                         AS top_oi_strike_1,

@@ -21,20 +21,20 @@ pip install -r dashboard/requirements.txt
 streamlit run dashboard/app.py
 ```
 
-Every metric card links to a free public reference site for independent verification:
+Every metric card shows its source type and links to a public comparator site for manual cross-verification. All derived metrics are computed by dbt models from CBOE inputs — external links are comparators, not data sources.
 
-| Metric | Fact-Check Source |
-|--------|-------------------|
-| Spot Price | [Yahoo Finance](https://finance.yahoo.com/quote/GME) |
-| Max Pain | [SwaggyStocks](https://swaggystocks.com/dashboard/options-max-pain/GME) |
-| P/C Ratio | [Barchart](https://www.barchart.com/stocks/quotes/GME/options-overview) |
-| Net GEX | [SqueezeMetrics](https://squeezemetrics.com/monitor/dix) |
-| IV30 | [MarketChameleon](https://marketchameleon.com/Overview/GME/IV/) |
-| Gamma Flip | [SqueezeMetrics](https://squeezemetrics.com/monitor/dix) |
-| HV20 | [MarketChameleon](https://marketchameleon.com/Overview/GME/IV/) |
-| IV Rank / Percentile | [MarketChameleon](https://marketchameleon.com/Overview/GME/IV/) |
-| Dealer Net Gamma | [SqueezeMetrics](https://squeezemetrics.com/monitor/dix) |
-| OI Daily Delta | [Barchart](https://www.barchart.com/stocks/quotes/GME/options-overview) |
+| Metric | Source Type | Comparator Link |
+|--------|-------------|-----------------|
+| Spot Price | source_native | [Yahoo Finance](https://finance.yahoo.com/quote/GME/) |
+| Max Pain | model-derived | [ChartExchange](https://chartexchange.com/symbol/nyse-gme/optionchain/summary/?adjustment=GME) |
+| P/C Ratio | model-derived | [ChartExchange](https://chartexchange.com/symbol/nyse-gme/optionchain/summary/?adjustment=GME) |
+| Net GEX | model-derived | [Barchart GEX](https://www.barchart.com/stocks/quotes/GME/gamma-exposure) |
+| IV30 | model-derived | [Barchart Vol](https://www.barchart.com/stocks/quotes/GME/volatility-greeks) |
+| Gamma Flip | model-derived | [Barchart GEX](https://www.barchart.com/stocks/quotes/GME/gamma-exposure) |
+| HV20 | model-derived | [Barchart Vol](https://www.barchart.com/stocks/quotes/GME/volatility-greeks) |
+| IV Rank / Percentile | model-derived | [Barchart Vol](https://www.barchart.com/stocks/quotes/GME/volatility-greeks) |
+| Dealer Net Gamma | model-derived | [Barchart GEX](https://www.barchart.com/stocks/quotes/GME/gamma-exposure) |
+| OI Daily Delta | model-derived | [Barchart Options](https://www.barchart.com/stocks/quotes/GME/options) |
 
 ## Architecture
 
@@ -47,7 +47,7 @@ Every metric card links to a free public reference site for independent verifica
 | ODS | `gme_ods_cboe_options_chain` | Fixture-backed by default (Parquet); live CBOE via httpfs when `use_fixture: false` |
 | DIM | `gme_dim_date` | Conformed date dimension with trading day flag (seeded 2024-2027) |
 | DWD | `gme_dwd_option_contract_di` | Cleaned option contracts with GEX computed, series classified |
-| DWS | `gme_dws_strike_gex_1d`, `gme_dws_daily_snapshot_1d`, `gme_dws_options_metrics_1d` | Strike-level GEX + daily summary + Phase-1 options metrics |
+| DWS | `gme_dws_strike_gex_1d`, `gme_dws_max_pain_by_expiry_1d`, `gme_dws_daily_snapshot_1d`, `gme_dws_options_metrics_1d` | Strike-level GEX + per-expiry max pain + daily summary + Phase-1 options metrics |
 | ADS | `gme_ads_market_dashboard` | One-big-table combining market snapshot, Phase-1 metrics, and calendar attributes |
 
 ### Data Source
@@ -80,7 +80,7 @@ gme_ads_market_dashboard         X
 | Metric | Formula | Layer |
 |--------|---------|-------|
 | GEX contribution | `gamma * OI * 100 * spot^2 * 0.01 * sign(call=+1, put=-1)` | DWD |
-| Max pain | Strike minimizing total exercise value across all contracts | DWS |
+| Max pain | Strike minimizing total exercise value; per-expiry, standard-class only, distinct candidates | DWS |
 | P/C ratio | Put OI / Call OI | DWS |
 | Gamma flip point | Strike where cumulative net GEX crosses zero (interpolated); fallback: nearest-to-zero strike | DWS |
 | IV30 | OI-weighted average IV for near-30-DTE contracts (20-40 DTE window) | DWS |
@@ -129,3 +129,138 @@ All 8 control classes implemented:
 | Business Reconciliation | GEX vs external — OpenBB probed, no free gamma source; proxy in place | exhausted |
 
 See `dqc_scorecard.json` for the machine-readable scorecard with full `attempts[]` evidence. The dashboard displays a DQC status badge derived from this file.
+
+## Deployment
+
+Two deployment modes are supported. Both use the same dashboard code; the difference is the dbt pipeline configuration and warehouse backend.
+
+### Environment Variables
+
+All configuration is via environment variables. Copy `.env.example` to `.env`, fill in values, and source before running:
+
+```bash
+cp .env.example .env
+# edit .env with your values
+set -a; source .env; set +a
+```
+
+`.env` is gitignored and must never be committed. See `.env.example` for all available variables.
+
+| Env Var | Used By | Default | Purpose |
+|---------|---------|---------|---------|
+| `MOTHERDUCK_TOKEN` | dbt-duckdb | *(none)* | MotherDuck authentication token |
+| `GME_MOTHERDUCK_PATH` | `profiles.yml` | `md:gme_db` | MotherDuck database path for dbt target |
+| `DBT_TARGET` | `profiles.yml` | `dev` | Active dbt target (`dev` or `motherduck`) |
+| `GME_DASHBOARD_DB_PATH` | `dashboard/app.py` | `target/gme_options.duckdb` | Dashboard warehouse connection path |
+
+### Public Demo (fixture-backed)
+
+Safe to reveal to third parties. Data is illustrative and clearly labeled as non-current.
+
+```bash
+cd examples/gme-options-mart
+pip install dbt-core dbt-duckdb
+dbt seed --profiles-dir .
+dbt run --profiles-dir .
+dbt test --profiles-dir .
+
+pip install -r dashboard/requirements.txt
+streamlit run dashboard/app.py
+```
+
+The dashboard displays a prominent **FIXTURE / DEMO MODE** banner. All values are derived from a static Parquet snapshot and cannot be mistaken for live market data.
+
+### Operator / Live Mode
+
+Uses live delayed CBOE data and optionally connects to a shared MotherDuck warehouse.
+
+**Step 1 — Configure live mode:**
+
+Edit `dbt_project.yml`:
+```yaml
+vars:
+  use_fixture: false
+```
+
+**Step 2 — Run the pipeline (local DuckDB):**
+
+```bash
+set -a; source .env; set +a   # load env vars
+dbt seed --profiles-dir .
+dbt run --profiles-dir .
+dbt test --profiles-dir .
+streamlit run dashboard/app.py
+```
+
+The dashboard shows a **LIVE DATA (DELAYED)** banner with the CBOE provider URL.
+
+**Step 3 (optional) — MotherDuck shared warehouse:**
+
+Set in `.env`:
+
+```bash
+MOTHERDUCK_TOKEN=your-token-here
+GME_MOTHERDUCK_PATH=md:gme_db
+DBT_TARGET=motherduck
+GME_DASHBOARD_DB_PATH=md:gme_db
+```
+
+Then run:
+
+```bash
+set -a; source .env; set +a
+dbt seed --profiles-dir . --target motherduck
+dbt run --profiles-dir . --target motherduck
+dbt test --profiles-dir . --target motherduck
+streamlit run dashboard/app.py
+```
+
+Or use Streamlit secrets (`.streamlit/secrets.toml`, gitignored):
+
+```toml
+db_path = "md:gme_db"
+```
+
+Credentials and tokens are masked in the dashboard UI.
+
+### MotherDuck Reset / Rebuild Runbook
+
+If the shared MotherDuck warehouse needs a clean rebuild (e.g. schema changes, stale legacy tables):
+
+**1. Archive the existing database (operator action):**
+
+```sql
+-- Connect to MotherDuck with your token
+CREATE DATABASE <archive_name> FROM <your_db>;
+-- Verify: SELECT count(*) FROM information_schema.tables WHERE table_catalog = '<archive_name>';
+```
+
+**2. Drop and recreate the target database (operator action — destructive):**
+
+```sql
+DROP DATABASE IF EXISTS <your_db>;
+CREATE DATABASE <your_db>;
+```
+
+**3. Rebuild from the current branch:**
+
+```bash
+set -a; source .env; set +a
+dbt seed --profiles-dir . --target motherduck --full-refresh
+dbt run  --profiles-dir . --target motherduck --full-refresh --vars '{"use_fixture": false}'
+dbt test --profiles-dir . --target motherduck --vars '{"use_fixture": false}'
+```
+
+**4. Verify the dashboard reads from MotherDuck:**
+
+```bash
+GME_DASHBOARD_DB_PATH=md:gme_db streamlit run dashboard/app.py
+# Smoke test in live mode:
+python dashboard/smoke_test.py --expect-source live
+```
+
+> **Warning:** Steps 1-2 are destructive operator actions. Always archive before dropping. Credentials (`MOTHERDUCK_TOKEN`) must be supplied via `.env` or environment — never committed.
+
+### Warehouse Metadata
+
+The `gme_ads_warehouse_metadata` model records the source mode (`fixture` or `live`), provider label, and provider URL at dbt-build time. The dashboard reads this table to determine the data source — it no longer relies solely on `dbt_project.yml` at runtime. Older databases without this table trigger an **unknown/stale** warning.
