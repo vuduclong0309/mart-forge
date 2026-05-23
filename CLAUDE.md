@@ -37,9 +37,10 @@ If in doubt, replace with a placeholder and note the substitution in the PR desc
 | Skill | When to use |
 |-------|-------------|
 | `using-mart-forge` | **Start here.** Detects lifecycle phase and routes to the right skill. |
+| `source-discovery` | Enumerate and vet candidate data sources from a WIKI-like doc (Phase A0, pre-BRD). |
 | `mart-brd` | Generate a Business Requirements Document from client input (Phase A). |
 | `mart-tdd` | Generate a Tech Design Document after BRD approval (Phase B). |
-| `mart-bootstrap` | Scaffold a new mart from a `mart.yml` config (Phase C — requires approved BRD + TDD). |
+| `mart-bootstrap` | Scaffold a new mart from a `mart.yml` config; runs `dbt compile` to verify (Phase C). |
 | `dqc-audit` | Audit DQC coverage for an existing mart (Phase D). |
 | `schema-evolve` | Propagate source column additions through the layer stack. |
 | `mart-review` | Adversarial production-readiness review with graded scorecard. |
@@ -47,8 +48,11 @@ If in doubt, replace with a placeholder and note the substitution in the PR desc
 ## Lifecycle
 
 ```
-[A] BRD → approval → [B] TDD → approval → [C] Scaffold → [D] DQC → [E] Presentation
+[A0] Source Discovery (optional) → [A] BRD → approval → [B] TDD → approval → [C] Scaffold → [D] DQC → [E] Dashboard
 ```
+
+Phase A0 is recommended when starting from a WIKI-like stakeholder document. It vets data sources
+before requirements are written so that BRD Section 4 sources are [CONFIRMED] rather than [ASSUMED].
 
 ## Data Layers
 

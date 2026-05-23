@@ -1,7 +1,7 @@
 {
   "name": "mart-forge",
-  "version": "0.1.0",
-  "description": "Methodology-first Kimball data warehouse scaffolding via AI agents. Provides skills for scaffolding, auditing, evolving, and reviewing Kimball data marts on dbt + DuckDB.",
+  "version": "0.2.0",
+  "description": "Methodology-first Kimball data warehouse scaffolding via AI agents. Provides skills for source discovery, scaffolding, auditing, evolving, and reviewing Kimball data marts on dbt + DuckDB.",
   "repository": "https://github.com/vuduclong0309/mart-forge",
   "license": "Apache-2.0",
   "hooks": "hooks/hooks.json",
@@ -9,27 +9,32 @@
     {
       "name": "using-mart-forge",
       "path": "skills/using-mart-forge/SKILL.md",
-      "description": "Bootstrap — detects lifecycle phase and routes to the right skill"
+      "description": "Bootstrap — detects lifecycle phase and routes to the right skill (start here)"
+    },
+    {
+      "name": "source-discovery",
+      "path": "skills/source-discovery/SKILL.md",
+      "description": "Phase A0 — enumerate and vet candidate data sources from a WIKI-like document"
     },
     {
       "name": "mart-brd",
       "path": "skills/mart-brd/SKILL.md",
-      "description": "Produce a Business Requirements Document (BRD) for a new Kimball mart from client input"
+      "description": "Phase A — produce a Business Requirements Document (BRD) from client input"
     },
     {
       "name": "mart-tdd",
       "path": "skills/mart-tdd/SKILL.md",
-      "description": "Generate a Tech Design Document with column-level calculation specs after BRD approval"
+      "description": "Phase B — generate a Tech Design Document with column-level calculation specs after BRD approval"
     },
     {
       "name": "mart-bootstrap",
       "path": "skills/mart-bootstrap/SKILL.md",
-      "description": "Scaffold a complete Kimball mart from mart.yml"
+      "description": "Phase C — scaffold a complete Kimball mart from mart.yml; runs dbt compile to verify"
     },
     {
       "name": "dqc-audit",
       "path": "skills/dqc-audit/SKILL.md",
-      "description": "Audit DQC coverage and produce a gap analysis"
+      "description": "Phase D — audit DQC coverage and produce a gap analysis"
     },
     {
       "name": "schema-evolve",
