@@ -1,6 +1,8 @@
 # Business Requirements Document: GME Options Mart
 
-> Version 1.0 — Open-source example for the mart-forge framework.
+> Version 1.1 — Open-source example for the mart-forge framework.
+>
+> V1.1 (2026-05-23): Consolidated metric-source contract with source-native disposition policy. Replaced stale Appendix A with browser-verified evidence matching §2.8. Added ChartExchange comparator, rejected broken/wrong-asset links.
 
 ---
 
@@ -91,10 +93,12 @@ Each dashboard metric is classified by its data origin. This contract ensures th
 
 | Classification | Definition |
 |---------------|-----------|
-| **source_native** | Value read directly from the upstream provider (CBOE) and displayed as-is. |
-| **derived** | Computed by dbt models from source-native inputs. Formula is documented in TDD/BRD. |
+| **source_native** | Value read directly from the upstream provider (CBOE) and displayed as-is. No mart-side calculation — the provider computes and reports the value. |
+| **derived** | Computed by dbt models from source-native inputs. Formula is documented in TDD/BRD. Used when the provider does not report the metric directly or when the mart requires a specific calculation methodology (e.g. per-expiry/per-class scoping). |
 | **comparator_only** | External reference link for manual comparison. The mart does not ingest from this source; it is a link only. |
 | **unsupported** | No viable free live source exists. Value uses seed fixture for CI only. |
+
+**Source-native vs derived disposition policy:** A metric is classified `source_native` only when the upstream provider (CBOE) reports the value directly in its payload and the mart displays it without transformation. All other metrics are `derived` — even when an external comparator site shows a similar number, the mart computes its own value from CBOE inputs using documented formulas. If a future provider reports a metric directly (e.g. CBOE adding a GEX field), the classification may be upgraded to `source_native` after verifying the provider's methodology matches the mart's definition. Metrics where provider-reported and mart-derived values coexist should document both and note which is displayed.
 
 | Dashboard Card | Metric | Source Type | Provider / Formula | Expiry Grain | Contract Class | Freshness | Dashboard Label |
 |----------------|--------|-------------|-------------------|-------------|---------------|-----------|----------------|
@@ -338,46 +342,45 @@ No confidential, proprietary, or personally identifiable data is ingested, store
 
 ---
 
-## Appendix A: Section 2.7 Link Verification Evidence
+## Appendix A: Section 2.8 Link Verification Evidence
 
 Link verification was performed on 2026-05-23 using Playwright/Chromium 1.60.0 in headless mode. Each URL was loaded and the page title and body text were searched for the target asset (GME/GameStop) and the claimed metric. The full machine-readable report is committed at `examples/gme-options-mart/brd_link_verification.json`.
 
-### Verified (exact)
+All dashboard metrics are model-derived from CBOE inputs; external links are **comparator references** for manual cross-verification, not data sources.
 
-| URL | Confirms |
-|-----|----------|
-| <https://finance.yahoo.com/quote/GME/> | GME stock quote — "GameStop Corp. (GME) Stock Price, News, Quote & History" |
-| <https://maximum-pain.com/options/GME> | GME Max Pain Calculator with per-expiry strikes and OI |
-| <https://www.barchart.com/stocks/quotes/GME/put-call-ratios> | "GME Put/Call Ratio for Gamestop Corp Stock — Barchart.com" |
-| <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | "GME Gamma Exposure (GEX) for Gamestop Corp Stock — Barchart.com" |
-| <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | "GME Options Volatility & Greeks for Gamestop Corp Stock — Barchart.com" |
-| <https://www.barchart.com/stocks/quotes/GME/options> | "GME Options Prices for Gamestop Corp Stock — Barchart.com" |
+### Browser-Verified Comparators
 
-### Verified (proxy)
-
-| URL | Asset | Proxy Limitation |
-|-----|-------|-----------------|
-| <https://apewisdom.io/stocks/GME/> | GME Reddit mentions and sentiment history | Aggregation scope differs from mart fixture |
-| <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | GEX by strike (gamma flip and dealer net gamma derivable) | Derived scalars may not be labeled as single values |
-| <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | IV percentile visible | Lookback window may differ from 252-session mart definition |
+| URL | Dashboard Card(s) | Status | Finding |
+|-----|-------------------|--------|---------|
+| <https://finance.yahoo.com/quote/GME/> | Spot Price | comparator | GME stock price confirmed. Mart spot is source_native from CBOE `underlying_close`. |
+| <https://chartexchange.com/symbol/nyse-gme/optionchain/summary/?adjustment=GME> | Max Pain, P/C Ratio | comparator | Standard GME Jun 18, 2026 Max Pain $22.00, P/C 0.29 confirmed. `?adjustment=GME` scopes to standard contract class. ChartExchange is comparator only; API/data-use suitability for ingestion not confirmed. |
+| <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | Net GEX, Gamma Flip, Dealer Net Gamma | comparator | GME GEX confirmed. Barchart GEX formula may differ from mart formula. |
+| <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | IV30, HV20, IV Rank, IV Percentile | comparator | GME IV/HV confirmed. Barchart lookback window and weighting may differ. |
+| <https://www.barchart.com/stocks/quotes/GME/options> | OI Daily Delta, Top OI Strikes | comparator | GME options chain with per-contract OI confirmed. |
 
 ### Unsupported
 
 | Metric | Reason |
 |--------|--------|
-| `social_sentiment_score` | No free live source provides a mention-weighted average sentiment score in the −1 to +1 range. Mart value uses a seed fixture and is not suitable for live comparison. |
+| `social_mention_count` | No free live source matches this mart's aggregation definition. Seed fixture for CI only. |
+| `social_sentiment_score` | No free live source provides a mention-weighted average sentiment score in the −1 to +1 range. Seed fixture for CI only. |
 
 ### Unverified (bot protection / inaccessible)
 
 | URL | Expected Source | Note |
 |-----|----------------|------|
-| <https://investor.gamestop.com/events-presentations> | GameStop official ER calendar | Cloudflare/bot protection in headless browser; known public source |
-| <https://marketchameleon.com/Overview/GME/IV/> | IV rank, IV percentile | Cloudflare protection blocks headless; valid public source for manual verification |
+| <https://investor.gamestop.com/events-presentations> | GameStop official ER calendar | Cloudflare/bot protection in headless browser; known public source for earnings dates |
 
 ### Rejected Links
 
 | Prior Reference | URL | Reason Rejected |
 |-----------------|-----|----------------|
-| SqueezeMetrics DIX Monitor | <https://squeezemetrics.com/monitor> | **Wrong asset**: tracks S&P 500 market-wide GEX only, not individual stock GEX. GME not found on page. |
-| Yahoo Finance Community | <https://finance.yahoo.com/quote/GME/community> | Not a structured data source; discussion forum only. Removed from both social metrics. |
-| SwaggyStocks Max Pain | <https://swaggerstocks.com/options.php?ticker=GME> | Navigation failed (execution context error on redirect); replaced by Maximum-Pain.com. |
+| SqueezeMetrics DIX Monitor | <https://squeezemetrics.com/monitor> | **Wrong asset**: tracks S&P 500 market-wide GEX only, not individual stock GEX. |
+| Yahoo Finance Community | <https://finance.yahoo.com/quote/GME/community> | Discussion forum, not a structured data endpoint. |
+| SwaggyStocks Max Pain | <https://swaggerstocks.com/options.php?ticker=GME> | Navigation failed (execution context destroyed on redirect). |
+| QuiverQuant WallStreetBets | <https://www.quiverquant.com/wallstreetbets/?ticker=GME> | **Wrong asset**: page shows SPY/S&P 500 content by default, not GME. |
+| ApeWisdom | <https://apewisdom.io/stocks/GME/> | Aggregation scope differs from mart fixture definition. Social metrics reclassified as unsupported. |
+| Maximum-Pain.com | <https://maximum-pain.com/options/GME> | Replaced by ChartExchange which supports adjustment-specific routes (`?adjustment=GME` for standard class). Maximum-Pain.com does not distinguish standard vs adjusted contract class. |
+| Market Chameleon IV | <https://marketchameleon.com/Overview/GME/IV/> | `ERR_HTTP2_PROTOCOL_ERROR` in Playwright 2026-05-23. Cannot be represented as browser-verified. |
+| Barchart options-overview | <https://www.barchart.com/stocks/quotes/GME/options-overview> | CloudFront `403 ERROR` in Playwright 2026-05-23. Other Barchart sub-pages remain accessible. |
+| Barchart Put/Call Ratios | <https://www.barchart.com/stocks/quotes/GME/put-call-ratios> | Replaced by ChartExchange which shows per-expiry, per-contract-class P/C matching mart scoping. |

@@ -1,6 +1,8 @@
 # Sign-Off PRD: gme-options-mart
 
 > Generated from `mart.yml`. This is the open-source example mart for the mart-forge framework.
+>
+> V1.1 (2026-05-23): Right-anchored OCC parsing, contract_class classification, per-expiry/per-class max pain via `gme_dws_max_pain_by_expiry_1d`, standard-class P/C ratio scoping, updated traceability matrices.
 
 ---
 
@@ -197,78 +199,104 @@ WITH gex_agg AS (
 
 **Definition:** The strike price at which the total dollar value of in-the-money options is minimized — the price where option holders would collectively lose the most money at expiration.
 
+**Scope:** Per-expiry, per-contract-class. The dashboard shows the nearest standard-class expiry.
+
 **Algorithm:**
-1. Cross-join DWD contracts against themselves (c1 = candidate strike, c2 = all contracts)
-2. For each candidate strike, calculate total pain:
+1. Select DISTINCT strike candidates within each (pull_date, ticker, expiry, contract_class) partition
+2. Cross-join candidates against contracts in the same partition
+3. For each candidate strike, calculate total pain:
    - **Calls ITM below candidate:** `(candidate - call_strike) * call_OI * 100`
    - **Puts ITM above candidate:** `(put_strike - candidate) * put_OI * 100`
-3. Select the candidate with the minimum total pain
+4. Select the candidate with the minimum total pain per (pull_date, ticker, expiry, contract_class)
 
-**SQL expression** (`gme_dws_daily_snapshot_1d.sql`, lines 13-34):
+**SQL expression** (`gme_dws_max_pain_by_expiry_1d.sql`):
+
+```sql
+WITH contracts AS (
+    SELECT pull_date, ticker, expiry, strike, option_type, open_interest, contract_class
+    FROM gme_dwd_option_contract_di
+),
+candidates AS (
+    SELECT DISTINCT pull_date, ticker, expiry, contract_class, strike AS candidate
+    FROM contracts
+),
+pain_calc AS (
+    SELECT c.pull_date, c.ticker, c.expiry, c.contract_class, c.candidate,
+        SUM(CASE
+            WHEN ct.option_type = 'call' AND ct.strike < c.candidate
+            THEN (c.candidate - ct.strike) * ct.open_interest * 100
+            WHEN ct.option_type = 'put' AND ct.strike > c.candidate
+            THEN (ct.strike - c.candidate) * ct.open_interest * 100
+            ELSE 0
+        END) AS total_pain
+    FROM candidates c
+    INNER JOIN contracts ct ON c.pull_date = ct.pull_date AND c.ticker = ct.ticker
+        AND c.expiry = ct.expiry AND c.contract_class = ct.contract_class
+    GROUP BY c.pull_date, c.ticker, c.expiry, c.contract_class, c.candidate
+)
+SELECT pull_date, ticker, expiry, contract_class,
+    candidate AS max_pain_strike, total_pain AS min_total_pain
+FROM pain_calc
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY pull_date, ticker, expiry, contract_class ORDER BY total_pain ASC
+) = 1
+```
+
+**Snapshot join** (`gme_dws_daily_snapshot_1d.sql`): The daily snapshot selects the nearest standard-class expiry:
 
 ```sql
 max_pain AS (
-    WITH pain_calc AS (
-        SELECT
-            c1.pull_date, c1.ticker,
-            c1.strike AS candidate,
-            SUM(CASE
-                WHEN c2.option_type = 'call' AND c2.strike < c1.strike
-                THEN (c1.strike - c2.strike) * c2.open_interest * 100
-                WHEN c2.option_type = 'put' AND c2.strike > c1.strike
-                THEN (c2.strike - c1.strike) * c2.open_interest * 100
-                ELSE 0
-            END) AS total_pain
-        FROM gme_dwd_option_contract_di c1
-        CROSS JOIN gme_dwd_option_contract_di c2
-        WHERE c1.pull_date = c2.pull_date AND c1.ticker = c2.ticker
-        GROUP BY c1.pull_date, c1.ticker, c1.strike
-    )
-    SELECT pull_date, ticker, candidate AS max_pain_strike
-    FROM pain_calc
+    SELECT pull_date, ticker, max_pain_strike, expiry AS max_pain_expiry
+    FROM gme_dws_max_pain_by_expiry_1d
+    WHERE contract_class = 'standard'
     QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY pull_date, ticker ORDER BY total_pain ASC
+        PARTITION BY pull_date, ticker ORDER BY expiry ASC
     ) = 1
 )
 ```
 
-**Max pain convergence** (line 69):
+**Max pain convergence:**
 
 ```sql
 ROUND(ABS(s.spot - mp.max_pain_strike) / s.spot * 100, 2) AS max_pain_convergence_pct
 ```
 
-Measures how far the current spot price is from the max pain strike as a percentage.
-
 **Traceability:**
 | Source column | Source model | Target column | Target model |
 |--------------|-------------|---------------|--------------|
-| strike | gme_dwd_option_contract_di | max_pain_strike | gme_dws_daily_snapshot_1d |
-| option_type | gme_dwd_option_contract_di | max_pain_strike | gme_dws_daily_snapshot_1d |
-| open_interest | gme_dwd_option_contract_di | max_pain_strike | gme_dws_daily_snapshot_1d |
+| strike, option_type, open_interest, contract_class | gme_dwd_option_contract_di | max_pain_strike, min_total_pain | gme_dws_max_pain_by_expiry_1d |
+| max_pain_strike, expiry | gme_dws_max_pain_by_expiry_1d | max_pain_strike, max_pain_expiry | gme_dws_daily_snapshot_1d |
 | spot, max_pain_strike | gme_dws_daily_snapshot_1d | max_pain_convergence_pct | gme_dws_daily_snapshot_1d |
 
 ### 6.5 Put/Call Ratio
 
-**Definition:** Ratio of total put open interest to total call open interest across all contracts for a given day. Values > 1.0 indicate bearish sentiment; < 1.0 indicate bullish sentiment.
+**Definition:** Ratio of total put open interest to total call open interest for standard-class contracts on the nearest standard expiry (same expiry as max pain). Values > 1.0 indicate bearish sentiment; < 1.0 indicate bullish sentiment.
+
+**Scope:** Standard contract class only, scoped to the same nearest expiry as max pain. This ensures comparability with ChartExchange's per-expiry/per-class P/C values.
 
 **Formula:**
 
 ```
 P/C ratio = SUM(put_OI) / SUM(call_OI)
+WHERE contract_class = 'standard' AND expiry = max_pain_expiry
 ```
 
-**SQL expression** (`gme_dws_daily_snapshot_1d.sql`, lines 36-45):
+**SQL expression** (`gme_dws_daily_snapshot_1d.sql`):
 
 ```sql
 pc_ratio AS (
     SELECT
-        pull_date, ticker,
-        SUM(CASE WHEN option_type = 'put' THEN open_interest ELSE 0 END) * 1.0
-        / NULLIF(SUM(CASE WHEN option_type = 'call' THEN open_interest ELSE 0 END), 0)
-                                                                    AS pc_ratio
-    FROM gme_dwd_option_contract_di
-    GROUP BY pull_date, ticker
+        c.pull_date, c.ticker,
+        SUM(CASE WHEN c.option_type = 'put' THEN c.open_interest ELSE 0 END) * 1.0
+        / NULLIF(SUM(CASE WHEN c.option_type = 'call' THEN c.open_interest ELSE 0 END), 0)
+                                                                    AS pc_ratio,
+        mp_ref.max_pain_expiry                                      AS pc_ratio_expiry
+    FROM gme_dwd_option_contract_di c
+    INNER JOIN max_pain mp_ref
+        ON c.pull_date = mp_ref.pull_date AND c.ticker = mp_ref.ticker
+    WHERE c.contract_class = 'standard'
+      AND c.expiry = mp_ref.max_pain_expiry
+    GROUP BY c.pull_date, c.ticker, mp_ref.max_pain_expiry
 )
 ```
 
@@ -279,8 +307,8 @@ pc_ratio AS (
 **Traceability:**
 | Source column | Source model | Target column | Target model |
 |--------------|-------------|---------------|--------------|
-| open_interest | gme_dwd_option_contract_di | pc_ratio | gme_dws_daily_snapshot_1d |
-| option_type | gme_dwd_option_contract_di | pc_ratio | gme_dws_daily_snapshot_1d |
+| open_interest, option_type, contract_class, expiry | gme_dwd_option_contract_di | pc_ratio | gme_dws_daily_snapshot_1d |
+| max_pain_expiry | max_pain CTE (from gme_dws_max_pain_by_expiry_1d) | pc_ratio_expiry | gme_dws_daily_snapshot_1d |
 
 ### 6.6 Additional Derived Columns
 
@@ -311,9 +339,9 @@ CASE
 END                                                AS series_type
 ```
 
-#### Top OI Strikes (`gme_dws_daily_snapshot_1d.sql`, lines 47-56)
+#### Top OI Strikes (`gme_dws_daily_snapshot_1d.sql`)
 
-Aggregates open interest by strike and ranks by total OI descending. Top 3 strikes surfaced in the daily snapshot.
+Aggregates open interest by strike for standard-class contracts on the nearest standard expiry (same expiry as max pain). Ranks by total OI descending. Top 3 strikes surfaced in the daily snapshot.
 
 ```sql
 top_oi AS (
@@ -323,42 +351,62 @@ top_oi AS (
             PARTITION BY pull_date, ticker ORDER BY open_interest DESC
         ) AS oi_rank
     FROM (
-        SELECT pull_date, ticker, strike, SUM(open_interest) AS open_interest
-        FROM gme_dwd_option_contract_di
-        GROUP BY pull_date, ticker, strike
+        SELECT c.pull_date, c.ticker, c.strike, SUM(c.open_interest) AS open_interest
+        FROM gme_dwd_option_contract_di c
+        INNER JOIN max_pain mp_ref
+            ON c.pull_date = mp_ref.pull_date AND c.ticker = mp_ref.ticker
+        WHERE c.contract_class = 'standard'
+          AND c.expiry = mp_ref.max_pain_expiry
+        GROUP BY c.pull_date, c.ticker, c.strike
     )
 )
 ```
 
 ### 6.7 ODS Parsing Logic
 
-#### OCC Symbol Parsing (`gme_ods_cboe_options_chain.sql`, lines 49-58)
+#### OCC Symbol Parsing (`gme_ods_cboe_options_chain.sql`)
 
-The CBOE API returns raw OCC symbols (e.g., `GME260620C00025000`). The ODS model parses them:
+The CBOE API returns raw OCC symbols (e.g., `GME260620C00025000` for standard, `GME1260618C00003000` for adjusted). The ODS model uses **right-anchored parsing** to handle both standard and adjusted roots:
 
-**Expiry date** (format: `{TICKER}{YYMMDD}{C/P}{strike*1000}`):
+**OCC format:** `{ROOT}{YYMMDD}{C/P}{strike*1000}` — the last 15 characters are always `YYMMDD + C/P + 8-digit strike`. The root length varies (3 for `GME`, 4 for `GME1`, etc.).
+
+**Expiry date** (right-anchored: positions -15 to -10):
 
 ```sql
 TRY_CAST(
-    '20' || SUBSTRING(CAST(elem['option'] AS VARCHAR), 4, 2) || '-' ||
-    SUBSTRING(CAST(elem['option'] AS VARCHAR), 6, 2) || '-' ||
-    SUBSTRING(CAST(elem['option'] AS VARCHAR), 8, 2)
+    '20' || SUBSTRING(sym, LENGTH(sym) - 14, 2) || '-' ||
+    SUBSTRING(sym, LENGTH(sym) - 12, 2) || '-' ||
+    SUBSTRING(sym, LENGTH(sym) - 10, 2)
 AS DATE)                                                          AS expiry
 ```
 
-**Option type:**
+**Option type** (right-anchored: position -9):
 
 ```sql
-CASE WHEN SUBSTRING(CAST(elem['option'] AS VARCHAR), 10, 1) = 'C'
+CASE WHEN SUBSTRING(sym, LENGTH(sym) - 8, 1) = 'C'
      THEN 'call' ELSE 'put' END                                   AS option_type
 ```
 
-**Strike price** (8-digit integer divided by 1000):
+**Strike price** (right-anchored: last 8 digits / 1000):
 
 ```sql
-TRY_CAST(SUBSTRING(CAST(elem['option'] AS VARCHAR), 11) AS DOUBLE)
+TRY_CAST(RIGHT(sym, 8) AS DOUBLE)
     / 1000.0                                                      AS strike
 ```
+
+#### Contract Class (`gme_dwd_option_contract_di.sql`)
+
+The DWD model classifies contracts as standard or adjusted based on symbol length:
+
+```sql
+CASE
+    WHEN LENGTH(option_symbol) <= LENGTH(ticker) + 15
+    THEN 'standard'
+    ELSE 'adjusted'
+END                                                AS contract_class
+```
+
+Standard OCC symbols have root length equal to ticker length (e.g., `GME` = 3 chars, total = 3 + 15 = 18). Adjusted symbols have longer roots (e.g., `GME1` = 4 chars, total = 4 + 15 = 19+).
 
 ---
 
@@ -384,9 +432,11 @@ Every SQL expression maps to a TDD field; every TDD metric maps to a model and t
 | 6.2 | gex_rank | models/dws/gme_dws_strike_gex_1d.sql | 16-19 | schema.yml: not_null on gex_rank |
 | 6.3 | net_gex (total) | models/dws/gme_dws_daily_snapshot_1d.sql | 1-11 | (aggregated from tested source) |
 | 6.3 | top_gex_strike | models/dws/gme_dws_daily_snapshot_1d.sql | 6-8 | — |
-| 6.4 | max_pain_strike | models/dws/gme_dws_daily_snapshot_1d.sql | 13-34 | — |
-| 6.4 | max_pain_convergence_pct | models/dws/gme_dws_daily_snapshot_1d.sql | 69 | — |
-| 6.5 | pc_ratio | models/dws/gme_dws_daily_snapshot_1d.sql | 36-45 | schema.yml: not_null; test_dqc_accepted_ranges.sql |
+| 6.4 | max_pain_strike | models/dws/gme_dws_max_pain_by_expiry_1d.sql → snapshot via JOIN | — | schema.yml: not_null; test_max_pain_no_mixed_class.sql |
+| 6.4 | max_pain_expiry | models/dws/gme_dws_max_pain_by_expiry_1d.sql → snapshot via JOIN | — | schema.yml on ADS |
+| 6.4 | max_pain_convergence_pct | models/dws/gme_dws_daily_snapshot_1d.sql | — | — |
+| 6.5 | pc_ratio | models/dws/gme_dws_daily_snapshot_1d.sql | — | schema.yml: not_null; test_dqc_accepted_ranges.sql; standard class + nearest expiry |
+| 6.5 | pc_ratio_expiry | models/dws/gme_dws_daily_snapshot_1d.sql | — | Same expiry as max_pain_expiry |
 | 6.6 | mid_price | models/dwd/gme_dwd_option_contract_di.sql | 11-14 | — |
 | 6.6 | dte | models/dwd/gme_dwd_option_contract_di.sql | 28 | — |
 | 6.6 | series_type | models/dwd/gme_dwd_option_contract_di.sql | 40-44 | schema.yml: accepted_values [WEEKLY, MONTHLY, LEAP] |
@@ -399,9 +449,10 @@ Every SQL expression maps to a TDD field; every TDD metric maps to a model and t
 
 | Model file | Column | TDD section | Formula reference |
 |------------|--------|-------------|-------------------|
-| gme_ods_cboe_options_chain.sql | expiry | 6.7 | OCC symbol parse: positions 4-9 -> YYMMDD |
-| gme_ods_cboe_options_chain.sql | option_type | 6.7 | OCC symbol parse: position 10 -> C/P |
-| gme_ods_cboe_options_chain.sql | strike | 6.7 | OCC symbol parse: positions 11+ / 1000 |
+| gme_ods_cboe_options_chain.sql | expiry | 6.7 | Right-anchored OCC parse: positions -15 to -10 -> YYMMDD |
+| gme_ods_cboe_options_chain.sql | option_type | 6.7 | Right-anchored OCC parse: position -9 -> C/P |
+| gme_ods_cboe_options_chain.sql | strike | 6.7 | Right-anchored OCC parse: last 8 digits / 1000 |
+| gme_dwd_option_contract_di.sql | contract_class | 6.7 | `LENGTH(symbol) <= LENGTH(ticker) + 15` -> standard/adjusted |
 | gme_dwd_option_contract_di.sql | mid_price | 6.6 | (bid + ask) / 2, fallback to last_trade_price |
 | gme_dwd_option_contract_di.sql | dte | 6.6 | expiry - pull_date |
 | gme_dwd_option_contract_di.sql | gex_contribution | 6.1 | gamma * OI * 100 * spot^2 * 0.01 * sign |
@@ -412,10 +463,11 @@ Every SQL expression maps to a TDD field; every TDD metric maps to a model and t
 | gme_dws_strike_gex_1d.sql | gex_rank | 6.2 | ROW_NUMBER by ABS(net_gex) DESC |
 | gme_dws_daily_snapshot_1d.sql | net_gex | 6.3 | SUM of strike-level net_gex |
 | gme_dws_daily_snapshot_1d.sql | top_gex_strike | 6.3 | Strike with MAX(ABS(net_gex)) |
-| gme_dws_daily_snapshot_1d.sql | max_pain_strike | 6.4 | Cross-join pain calc, MIN(total_pain) |
+| gme_dws_max_pain_by_expiry_1d.sql | max_pain_strike | 6.4 | DISTINCT candidates cross-join, MIN(total_pain), per-expiry per-class |
+| gme_dws_daily_snapshot_1d.sql | max_pain_strike, max_pain_expiry | 6.4 | JOIN to max_pain_by_expiry WHERE contract_class = 'standard', nearest expiry |
 | gme_dws_daily_snapshot_1d.sql | max_pain_convergence_pct | 6.4 | ABS(spot - max_pain) / spot * 100 |
-| gme_dws_daily_snapshot_1d.sql | pc_ratio | 6.5 | SUM(put_OI) / NULLIF(SUM(call_OI), 0) |
-| gme_dws_daily_snapshot_1d.sql | top_oi_strike_1/2/3 | 6.6 | Ranked by SUM(OI) per strike DESC |
+| gme_dws_daily_snapshot_1d.sql | pc_ratio, pc_ratio_expiry | 6.5 | SUM(put_OI) / NULLIF(SUM(call_OI), 0) WHERE standard class + nearest expiry |
+| gme_dws_daily_snapshot_1d.sql | top_oi_strike_1/2/3 | 6.6 | Ranked by SUM(OI) per strike DESC, standard class + nearest expiry |
 | gme_ads_market_dashboard.sql | all columns | — | Pass-through join of DWS snapshot + DIM date |
 
 ---
