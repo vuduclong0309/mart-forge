@@ -129,3 +129,78 @@ All 8 control classes implemented:
 | Business Reconciliation | GEX vs external — OpenBB probed, no free gamma source; proxy in place | exhausted |
 
 See `dqc_scorecard.json` for the machine-readable scorecard with full `attempts[]` evidence. The dashboard displays a DQC status badge derived from this file.
+
+## Deployment
+
+Two deployment modes are supported. Both use the same dashboard code; the difference is the dbt pipeline configuration and warehouse backend.
+
+### Public Demo (fixture-backed)
+
+Safe to reveal to third parties. Data is illustrative and clearly labeled as non-current.
+
+```bash
+cd examples/gme-options-mart
+pip install dbt-core dbt-duckdb
+dbt seed --profiles-dir .
+dbt run --profiles-dir .
+dbt test --profiles-dir .
+
+pip install -r dashboard/requirements.txt
+streamlit run dashboard/app.py
+```
+
+The dashboard displays a prominent **FIXTURE / DEMO MODE** banner. All values are derived from a static Parquet snapshot and cannot be mistaken for live market data.
+
+### Operator / Live Mode
+
+Uses live delayed CBOE data and optionally connects to a shared MotherDuck warehouse.
+
+**Step 1 — Configure live mode:**
+
+Edit `dbt_project.yml`:
+```yaml
+vars:
+  use_fixture: false
+```
+
+**Step 2 — Run the pipeline (local DuckDB):**
+
+```bash
+dbt seed --profiles-dir .
+dbt run --profiles-dir .
+dbt test --profiles-dir .
+streamlit run dashboard/app.py
+```
+
+The dashboard shows a **LIVE DATA (DELAYED)** banner with the CBOE provider URL.
+
+**Step 3 (optional) — MotherDuck shared warehouse:**
+
+Set the MotherDuck token as an environment variable (never commit it):
+
+```bash
+export MOTHERDUCK_TOKEN="your-token-here"
+export DBT_TARGET=motherduck
+dbt seed --profiles-dir . --target motherduck
+dbt run --profiles-dir . --target motherduck
+dbt test --profiles-dir . --target motherduck
+```
+
+Point the dashboard at the shared warehouse:
+
+```bash
+export GME_DASHBOARD_DB="md:gme_options"
+streamlit run dashboard/app.py
+```
+
+Or use Streamlit secrets (`.streamlit/secrets.toml`, gitignored):
+
+```toml
+db_path = "md:gme_options"
+```
+
+Credentials and tokens are masked in the dashboard UI. The `profiles.yml` MotherDuck target uses `md:gme_options` — the token is supplied via `MOTHERDUCK_TOKEN` env var, never stored in config files.
+
+### Warehouse Metadata
+
+The `gme_ads_warehouse_metadata` model records the source mode (`fixture` or `live`), provider label, and provider URL at dbt-build time. The dashboard reads this table to determine the data source — it no longer relies solely on `dbt_project.yml` at runtime. Older databases without this table trigger an **unknown/stale** warning.

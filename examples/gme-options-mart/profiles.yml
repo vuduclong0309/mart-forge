@@ -1,9 +1,18 @@
 gme_options_mart:
-  target: dev
+  target: "{{ env_var('DBT_TARGET', 'dev') }}"
   outputs:
     dev:
       type: duckdb
       path: "target/gme_options.duckdb"
+      schema: main
+      threads: 1
+      extensions:
+        - httpfs
+        - json
+
+    motherduck:
+      type: duckdb
+      path: "md:gme_options"
       schema: main
       threads: 1
       extensions:

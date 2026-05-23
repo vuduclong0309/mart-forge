@@ -17,6 +17,7 @@ in the mart directory first).
 
 import argparse
 import contextlib
+import re
 import socket
 import subprocess
 import sys
@@ -43,6 +44,12 @@ def _check(name: str, ok: bool, detail: str = ""):
         if detail:
             msg += f" — {detail}"
         print(msg)
+
+
+_LOCAL_URL_RE = re.compile(
+    r'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?',
+    re.IGNORECASE,
+)
 
 
 def main():
@@ -124,6 +131,19 @@ def main():
                 non_zero = box is not None and box["height"] > 50 and box["width"] > 100
                 _check(f"chart-{idx}-nonblank", non_zero,
                        f"bbox={box}")
+
+            # ── Source-link provenance guard ──────────────────────
+            links = page.query_selector_all("a[href]")
+            local_violations = []
+            for link in links:
+                href = link.get_attribute("href") or ""
+                if _LOCAL_URL_RE.search(href):
+                    text = (link.text_content() or "").strip()[:60]
+                    if href != url and not href.startswith(url):
+                        local_violations.append(f"{href} ({text})")
+            _check("no-localhost-source-links",
+                   len(local_violations) == 0,
+                   f"found local URLs in source/fact-check links: {local_violations}")
 
             page.screenshot(path=args.screenshot, full_page=True)
             print(f"\nScreenshot saved to {args.screenshot}")

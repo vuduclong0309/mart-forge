@@ -356,3 +356,32 @@ models:
         description: "30-day trailing average put/call ratio."
       - name: observation_count_30d
         description: "Number of observations in the 30-day trailing window."
+
+  - name: gme_ads_warehouse_metadata
+    description: >
+      Build-time metadata capturing the actual source mode, provider label,
+      and provider URL used during the dbt run. The dashboard reads this table
+      to determine fixture vs live mode instead of inspecting dbt_project.yml.
+      Grain: single row.
+    columns:
+      - name: source_mode
+        description: "'fixture' or 'live' — set at dbt-build time from use_fixture var."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["fixture", "live"]
+      - name: primary_source_label
+        description: "Human-readable label for the data source."
+        data_tests:
+          - not_null
+      - name: primary_source_url
+        description: "External URL of the primary data provider. NULL in fixture mode."
+      - name: data_as_of_date
+        description: "Latest pull_date in the ODS layer."
+        data_tests:
+          - not_null
+      - name: warehouse_built_at_utc
+        description: "Latest pull_ts_utc from ODS — proxy for build time."
+        data_tests:
+          - not_null

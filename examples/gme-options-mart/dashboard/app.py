@@ -9,7 +9,9 @@ Educational Use Only / Not Financial Advice.
 """
 
 import json
+import os
 import pathlib
+import re
 
 import duckdb
 import pandas as pd
@@ -19,7 +21,6 @@ import yaml
 
 # ── paths ──────────────────────────────────────────────────────────
 BASE = pathlib.Path(__file__).parent.parent
-DB_PATH = BASE / "target" / "gme_options.duckdb"
 DQC_SCORECARD = BASE / "dqc_scorecard.json"
 BRD_VERIFICATION = BASE / "brd_link_verification.json"
 DBT_PROJECT = BASE / "dbt_project.yml"
@@ -29,14 +30,22 @@ st.set_page_config(page_title="GME Options Dashboard", layout="wide")
 
 # ── helpers ────────────────────────────────────────────────────────
 
-def _is_fixture_mode() -> bool:
-    if DBT_PROJECT.exists():
-        try:
-            cfg = yaml.safe_load(DBT_PROJECT.read_text())
-            return bool(cfg.get("vars", {}).get("use_fixture", False))
-        except Exception:
-            pass
-    return False
+def _resolve_db_path() -> str:
+    try:
+        if "db_path" in st.secrets:
+            return st.secrets["db_path"]
+    except Exception:
+        pass
+    env = os.environ.get("GME_DASHBOARD_DB")
+    if env:
+        return env
+    return str(BASE / "target" / "gme_options.duckdb")
+
+
+def _mask_connection_string(raw: str) -> str:
+    masked = re.sub(r'(token=)[^&\s]+', r'\1***', raw, flags=re.IGNORECASE)
+    masked = re.sub(r'(saas_mode=true&)[^&\s]*token[^&\s]*', r'\1token=***', masked, flags=re.IGNORECASE)
+    return masked
 
 
 @st.cache_data(ttl=300)
@@ -94,7 +103,55 @@ def _fact_caption(metric: str, brd: dict) -> str:
 
 @st.cache_resource
 def _get_db():
-    return duckdb.connect(str(DB_PATH), read_only=True)
+    db_path = _resolve_db_path()
+    return duckdb.connect(db_path, read_only=True)
+
+
+# ── warehouse metadata ────────────────────────────────────────────
+
+@st.cache_data(ttl=300)
+def _load_warehouse_metadata() -> dict | None:
+    try:
+        df = _get_db().sql(
+            "SELECT source_mode, primary_source_label, primary_source_url,"
+            " data_as_of_date, warehouse_built_at_utc"
+            " FROM gme_ads_warehouse_metadata LIMIT 1"
+        ).fetchdf()
+        if df.empty:
+            return None
+        row = df.iloc[0]
+        return {
+            "source_mode": row.get("source_mode"),
+            "primary_source_label": row.get("primary_source_label"),
+            "primary_source_url": row.get("primary_source_url"),
+            "data_as_of_date": row.get("data_as_of_date"),
+            "warehouse_built_at_utc": row.get("warehouse_built_at_utc"),
+        }
+    except Exception:
+        return None
+
+
+def _is_fixture_mode_from_yml() -> bool:
+    if DBT_PROJECT.exists():
+        try:
+            cfg = yaml.safe_load(DBT_PROJECT.read_text())
+            return bool(cfg.get("vars", {}).get("use_fixture", False))
+        except Exception:
+            pass
+    return False
+
+
+def _resolve_source_mode() -> tuple[str, str | None, str | None]:
+    meta = _load_warehouse_metadata()
+    if meta and meta.get("source_mode"):
+        return (
+            meta["source_mode"],
+            meta.get("primary_source_label"),
+            meta.get("primary_source_url"),
+        )
+    if _is_fixture_mode_from_yml():
+        return "fixture", "Fixture / Illustrative Data (yml fallback)", None
+    return "unknown", None, None
 
 
 # ── data loaders ───────────────────────────────────────────────────
@@ -419,7 +476,8 @@ def _render_dqc_panel(scorecard: dict | None, brd: dict):
 def main():
     scorecard = load_dqc()
     brd = _load_brd()
-    fixture_mode = _is_fixture_mode()
+    source_mode, source_label, source_url = _resolve_source_mode()
+    fixture_mode = source_mode == "fixture"
 
     st.title("GME Options Dashboard")
     st.markdown(
@@ -427,13 +485,34 @@ def main():
         "Educational Use Only / Not Financial Advice"
     )
 
-    if fixture_mode:
+    if source_mode == "unknown":
+        st.error(
+            "**DATA SOURCE UNKNOWN** — The warehouse does not contain "
+            "source-mode metadata (`gme_ads_warehouse_metadata` table missing "
+            "or empty). This dashboard cannot confirm whether the data is "
+            "fixture, live, or stale. Re-run `dbt run --profiles-dir .` to "
+            "rebuild the warehouse with provenance metadata."
+        )
+    elif fixture_mode:
         st.warning(
             "**FIXTURE / DEMO MODE** — All values shown are derived from a "
             "static fixture snapshot (illustrative data, not live market prices). "
             "Set `use_fixture: false` in `dbt_project.yml` and re-run the "
             "pipeline for live delayed data from CBOE."
         )
+    else:
+        provider_link = ""
+        if source_url:
+            provider_link = f" Provider: [{source_label}]({source_url})."
+        st.info(
+            f"**LIVE DATA (DELAYED)** — Values are derived from {source_label}. "
+            "Data may be 15+ minutes behind real-time. "
+            "Not financial advice — verify independently before any decision."
+            f"{provider_link}"
+        )
+
+    db_display = _mask_connection_string(_resolve_db_path())
+    st.caption(f"Warehouse: `{db_display}`")
 
     df_latest = load_latest_ads()
     if df_latest.empty:
@@ -442,8 +521,22 @@ def main():
 
     row = df_latest.iloc[0]
     data_date = row.get("pull_date", "N/A")
-    mode_label = " (fixture snapshot — not current)" if fixture_mode else ""
-    st.caption(f"Data as of: **{data_date}**{mode_label}")
+
+    meta = _load_warehouse_metadata()
+    if meta and meta.get("warehouse_built_at_utc"):
+        built = meta["warehouse_built_at_utc"]
+        date_suffix = f" (built: {built})"
+    else:
+        date_suffix = ""
+
+    if fixture_mode:
+        mode_label = " (fixture snapshot — not current)"
+    elif source_mode == "unknown":
+        mode_label = " (source unknown — treat as stale)"
+    else:
+        mode_label = ""
+
+    st.caption(f"Data as of: **{data_date}**{mode_label}{date_suffix}")
 
     # ── Market Summary ─────────────────────────────────────────
     st.subheader("Market Summary")
