@@ -12,7 +12,7 @@ gme_options_mart:
 
     motherduck:
       type: duckdb
-      path: "md:gme_options"
+      path: "{{ env_var('GME_MOTHERDUCK_PATH', 'md:gme_options') }}"
       schema: main
       threads: 1
       extensions:

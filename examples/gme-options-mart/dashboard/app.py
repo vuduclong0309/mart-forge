@@ -36,7 +36,7 @@ def _resolve_db_path() -> str:
             return st.secrets["db_path"]
     except Exception:
         pass
-    env = os.environ.get("GME_DASHBOARD_DB")
+    env = os.environ.get("GME_DASHBOARD_DB_PATH")
     if env:
         return env
     return str(BASE / "target" / "gme_options.duckdb")

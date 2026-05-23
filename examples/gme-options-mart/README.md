@@ -180,6 +180,7 @@ Set the MotherDuck token as an environment variable (never commit it):
 
 ```bash
 export MOTHERDUCK_TOKEN="your-token-here"
+export GME_MOTHERDUCK_PATH="md:gme_options"   # configurable; default is md:gme_options
 export DBT_TARGET=motherduck
 dbt seed --profiles-dir . --target motherduck
 dbt run --profiles-dir . --target motherduck
@@ -189,7 +190,7 @@ dbt test --profiles-dir . --target motherduck
 Point the dashboard at the shared warehouse:
 
 ```bash
-export GME_DASHBOARD_DB="md:gme_options"
+export GME_DASHBOARD_DB_PATH="md:gme_options"
 streamlit run dashboard/app.py
 ```
 
@@ -199,7 +200,14 @@ Or use Streamlit secrets (`.streamlit/secrets.toml`, gitignored):
 db_path = "md:gme_options"
 ```
 
-Credentials and tokens are masked in the dashboard UI. The `profiles.yml` MotherDuck target uses `md:gme_options` — the token is supplied via `MOTHERDUCK_TOKEN` env var, never stored in config files.
+Credentials and tokens are masked in the dashboard UI. The `profiles.yml` MotherDuck target reads `GME_MOTHERDUCK_PATH` (default: `md:gme_options`). The token is supplied via `MOTHERDUCK_TOKEN` env var, never stored in config files.
+
+| Env Var | Used By | Default | Purpose |
+|---------|---------|---------|---------|
+| `MOTHERDUCK_TOKEN` | dbt-duckdb | *(none)* | MotherDuck authentication token |
+| `GME_MOTHERDUCK_PATH` | `profiles.yml` | `md:gme_options` | MotherDuck database path for dbt |
+| `DBT_TARGET` | `profiles.yml` | `dev` | Active dbt target (`dev` or `motherduck`) |
+| `GME_DASHBOARD_DB_PATH` | `dashboard/app.py` | `target/gme_options.duckdb` | Dashboard warehouse connection path |
 
 ### Warehouse Metadata
 
