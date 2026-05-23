@@ -502,9 +502,14 @@ class TestSignOffDetection:
         doc.write_text("# Doc\nGrade: A\n")
         assert _is_signed(doc)
 
-    def test_approved_is_signed(self, tmp_path):
+    def test_approved_alone_not_signed(self, tmp_path):
         doc = tmp_path / "doc.md"
         doc.write_text("# Doc\nAPPROVED by reviewer.\n")
+        assert not _is_signed(doc), "APPROVED alone must not satisfy Grade: A requirement"
+
+    def test_approved_with_grade_a_is_signed(self, tmp_path):
+        doc = tmp_path / "doc.md"
+        doc.write_text("# Doc\nAPPROVED by reviewer.\nGrade: A\n")
         assert _is_signed(doc)
 
     def test_grade_b_not_signed(self, tmp_path):
@@ -706,6 +711,64 @@ class TestMetricMappingValidation:
         result = scaffold(mart_dir, "test-mart", "tst")
         assert not result["success"]
         assert any("M-2" in e and "no mapping" in e.lower() for e in result["errors"])
+
+
+class TestContractEnforcementV2:
+    """Regression tests for Codex review blockers on 443ea41."""
+
+    def test_rejects_grade_a_removed(self, mart_dir):
+        """Blocker 1: removing Grade: A from both docs (keeping APPROVED) must fail."""
+        mart_dir.mkdir()
+        brd_no_grade = VALID_BRD.replace("Grade: A", "").replace("Sign-off: APPROVED", "Sign-off: APPROVED")
+        tdd_no_grade = VALID_TDD.replace("Grade: A", "").replace("Sign-off: APPROVED", "Sign-off: APPROVED")
+        (mart_dir / "brd.md").write_text(brd_no_grade)
+        (mart_dir / "tdd.md").write_text(tdd_no_grade)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"], "Scaffold accepted docs without Grade: A"
+        assert any("not signed off" in e for e in result["errors"])
+
+    def test_rejects_brd_ref_dash(self, mart_dir):
+        """Blocker 2: replacing both ADS BRD_ref with '-' must fail."""
+        mart_dir.mkdir()
+        tdd_dash_refs = VALID_TDD.replace("| M-2 | proxy |", "| - | proxy |").replace("| M-1 | exact |", "| - | exact |")
+        (mart_dir / "brd.md").write_text(VALID_BRD)
+        (mart_dir / "tdd.md").write_text(tdd_dash_refs)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"], "Scaffold accepted ADS with all BRD_ref = '-'"
+        assert any("no mapping" in e.lower() for e in result["errors"])
+
+    def test_rejects_invalid_link_status_bogus(self, mart_dir):
+        """Blocker 3: replacing link_status with 'bogus' must fail."""
+        mart_dir.mkdir()
+        brd_bogus = VALID_BRD.replace("| M-1 Revenue | native | exact |", "| M-1 Revenue | native | bogus |")
+        tdd_bogus = VALID_TDD.replace("| M-1 | exact |", "| M-1 | bogus |")
+        (mart_dir / "brd.md").write_text(brd_bogus)
+        (mart_dir / "tdd.md").write_text(tdd_bogus)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"], "Scaffold accepted invalid link_status 'bogus'"
+        assert any("bogus" in e for e in result["errors"])
+
+    def test_rejects_unbound_ads_column(self, mart_dir):
+        """Blocker 4: ADS binding to non-fixture column must fail."""
+        mart_dir.mkdir()
+        tdd_wrong_col = VALID_TDD.replace(
+            "| daily_revenue | DECIMAL | Daily revenue | 325.75 | dws.daily_revenue via join | DWS | M-1 | exact |",
+            "| case_volume | DECIMAL | Daily revenue | 325.75 | dws.daily_revenue via join | DWS | M-1 | exact |",
+        )
+        (mart_dir / "brd.md").write_text(VALID_BRD)
+        (mart_dir / "tdd.md").write_text(tdd_wrong_col)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"], "Scaffold accepted ADS column 'case_volume' not in fixture template"
+        assert any("case_volume" in e for e in result["errors"])
+        assert result["files_created"] == []
+
+    def test_dashboard_chart_contract_bound(self, signed_mart):
+        """Blocker 5: dashboard chart must iterate contracted metrics, not hardcode daily_revenue."""
+        scaffold(signed_mart, "test-mart", "tst")
+        dash = (signed_mart / "dashboard" / "app.py").read_text()
+        assert "Revenue Trend" not in dash, "Dashboard still has hardcoded 'Revenue Trend' heading"
+        assert "Metric Trends" in dash
+        assert "for metric in" in dash or "CONTRACTED_METRICS" in dash
 
 
 class TestNameSanitization:

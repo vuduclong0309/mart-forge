@@ -52,6 +52,8 @@ TABLE_SECTIONS = {
 
 REQUIRED_LAYER_SECTIONS = {"T-6", "T-8", "T-11"}
 
+FIXTURE_ADS_METRIC_COLUMNS = {"daily_revenue", "order_count"}
+
 CONTENT_SECTIONS = {
     "T-3": "Table Summary",
     "T-12": "Physical Design",
@@ -70,7 +72,7 @@ def _is_signed(doc_path: Path) -> bool:
     content = doc_path.read_text()
     if re.search(r"Grade:\s*[BCDF]", content):
         return False
-    return "Grade: A" in content or "APPROVED" in content
+    return bool(re.search(r"Grade:\s*A\b", content))
 
 
 def _extract_section(content: str, label: str, next_label: str | None) -> str:
@@ -198,7 +200,7 @@ def _validate_brd(brd_path: Path) -> list[str]:
     content = brd_path.read_text()
 
     if not _is_signed(brd_path):
-        errors.append("BRD exists but is not signed off. Require Grade: A or APPROVED.")
+        errors.append("BRD exists but is not signed off. Require Grade: A.")
 
     for i, section in enumerate(BRD_REQUIRED_SECTIONS):
         if section not in content:
@@ -243,6 +245,19 @@ def _validate_brd(brd_path: Path) -> list[str]:
     if "unverified" in content.lower():
         errors.append("BRD contains 'unverified' link_status — all links must be resolved before sign-off.")
 
+    metrics = _parse_brd_metrics(brd_path)
+    for m in metrics:
+        if m["source_type"] not in VALID_SOURCE_TYPES:
+            errors.append(
+                f"BRD metric {m['id']} has invalid source_type '{m['source_type']}' "
+                f"— must be one of {sorted(VALID_SOURCE_TYPES)}."
+            )
+        if m["link_status"] not in VALID_LINK_STATUSES:
+            errors.append(
+                f"BRD metric {m['id']} has invalid link_status '{m['link_status']}' "
+                f"— must be one of {sorted(VALID_LINK_STATUSES)}."
+            )
+
     return errors
 
 
@@ -254,7 +269,7 @@ def _validate_tdd(tdd_path: Path) -> list[str]:
     content = tdd_path.read_text()
 
     if not _is_signed(tdd_path):
-        errors.append("TDD exists but is not signed off. Require Grade: A or APPROVED.")
+        errors.append("TDD exists but is not signed off. Require Grade: A.")
 
     for section in TDD_REQUIRED_SECTIONS:
         if section not in content:
@@ -346,19 +361,28 @@ def _validate_metric_mapping(brd_path: Path, tdd_path: Path) -> list[str]:
         return errors
 
     ads_map = _parse_ads_metric_map(tdd_path)
-    if not ads_map:
-        return errors
 
     for metric in brd_metrics:
         mid = metric["id"]
         if mid not in ads_map:
             errors.append(f"BRD metric {mid} ({metric['name']}) has no mapping in TDD T-11 (ADS).")
         else:
-            tdd_ls = ads_map[mid]["link_status"]
+            ads_entry = ads_map[mid]
+            tdd_ls = ads_entry["link_status"]
             brd_ls = metric["link_status"]
+            if tdd_ls and tdd_ls not in VALID_LINK_STATUSES:
+                errors.append(
+                    f"TDD T-11 metric {mid} has invalid link_status '{tdd_ls}' "
+                    f"— must be one of {sorted(VALID_LINK_STATUSES)}."
+                )
             if tdd_ls and brd_ls and tdd_ls != brd_ls:
                 errors.append(
                     f"Metric {mid} link_status mismatch: BRD says '{brd_ls}', TDD T-11 says '{tdd_ls}'."
+                )
+            col = ads_entry.get("column", "")
+            if not col or col == "-":
+                errors.append(
+                    f"BRD metric {mid} ({metric['name']}) has empty ADS column binding in TDD T-11."
                 )
 
     return errors
@@ -401,6 +425,20 @@ def scaffold(mart_dir: Path, mart_name: str, prefix: str) -> dict:
             "link_status": m["link_status"],
             "ads_column": ads_info.get("column", ""),
         })
+
+    for m in contract_metrics:
+        if m["ads_column"] and m["ads_column"] not in FIXTURE_ADS_METRIC_COLUMNS:
+            return {
+                "success": False,
+                "errors": [
+                    f"Contract metric {m['id']} binds to ADS column '{m['ads_column']}' "
+                    f"which is not produced by the fixture template. The framework fixture "
+                    f"generates metric columns {sorted(FIXTURE_ADS_METRIC_COLUMNS)}. "
+                    f"Arbitrary domain scaffolding requires a validated implementation "
+                    f"contract (not yet supported at Phase F)."
+                ],
+                "files_created": [],
+            }
 
     contract = {
         "mart": {"name": mart_name, "prefix": prefix, "version": "1.0"},
