@@ -1,6 +1,6 @@
 {
   "mart": "gme-options-mart",
-  "generated_at": "2026-05-23T13:36:12Z",
+  "generated_at": "2026-05-23T13:52:20Z",
   "controls": [
     {
       "class": "pk_integrity",
@@ -12,7 +12,7 @@
         "gme_ads_market_dashboard"
       ],
       "status": "pass",
-      "verified_at": "2026-05-23T13:36:12Z",
+      "verified_at": "2026-05-23T13:52:20Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.not_null_gme_ads_market_dashboard_dealer_net_gamma.95562269f2",
         "test.gme_options_mart.not_null_gme_ads_market_dashboard_gamma_flip_point.abd44ef757",
@@ -79,7 +79,7 @@
         "test.gme_options_mart.unique_gme_dws_options_metrics_1d_pull_date.6791f82288",
         "test.gme_options_mart.unique_gme_dws_social_sentiment_1d_pull_date.dba1e6a555"
       ],
-      "last_dbt_run": "2026-05-23T13:36:04.172905Z",
+      "last_dbt_run": "2026-05-23T13:52:10.175023Z",
       "attempts": []
     },
     {
@@ -92,11 +92,11 @@
         "pull_date -> gme_dim_date.full_date"
       ],
       "status": "pass",
-      "verified_at": "2026-05-23T13:36:12Z",
+      "verified_at": "2026-05-23T13:52:20Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.relationships_gme_ads_market_dashboard_pull_date__full_date__ref_gme_dim_date_.c8f69bb9b8"
       ],
-      "last_dbt_run": "2026-05-23T13:36:04.172905Z",
+      "last_dbt_run": "2026-05-23T13:52:10.175023Z",
       "attempts": []
     },
     {
@@ -106,11 +106,11 @@
         "gme_ods_cboe_options_chain"
       ],
       "status": "pass",
-      "verified_at": "2026-05-23T13:36:12Z",
+      "verified_at": "2026-05-23T13:52:20Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_freshness"
       ],
-      "last_dbt_run": "2026-05-23T13:36:04.172905Z",
+      "last_dbt_run": "2026-05-23T13:52:10.175023Z",
       "attempts": []
     },
     {
@@ -124,11 +124,11 @@
         "gme_dws_options_metrics_1d"
       ],
       "status": "pass",
-      "verified_at": "2026-05-23T13:36:12Z",
+      "verified_at": "2026-05-23T13:52:20Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_completeness"
       ],
-      "last_dbt_run": "2026-05-23T13:36:04.172905Z",
+      "last_dbt_run": "2026-05-23T13:52:10.175023Z",
       "attempts": []
     },
     {
@@ -140,7 +140,7 @@
         "gme_dws_options_metrics_1d"
       ],
       "status": "pass",
-      "verified_at": "2026-05-23T13:36:12Z",
+      "verified_at": "2026-05-23T13:52:20Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.accepted_values_gme_ads_warehouse_metadata_source_mode__fixture__live.660d09e19b",
         "test.gme_options_mart.accepted_values_gme_dwd_option_contract_di_option_type__call__put.bb067ff468",
@@ -154,7 +154,7 @@
         "test.gme_options_mart.accepted_values_gme_ods_cboe_options_chain_ticker__GME.56d8a70262",
         "test.gme_options_mart.test_dqc_accepted_ranges"
       ],
-      "last_dbt_run": "2026-05-23T13:36:04.172905Z",
+      "last_dbt_run": "2026-05-23T13:52:10.175023Z",
       "attempts": []
     },
     {
@@ -164,11 +164,11 @@
         "gme_dwd_option_contract_di"
       ],
       "status": "pass",
-      "verified_at": "2026-05-23T13:36:12Z",
+      "verified_at": "2026-05-23T13:52:20Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_duplicate_detection"
       ],
-      "last_dbt_run": "2026-05-23T13:36:04.172905Z",
+      "last_dbt_run": "2026-05-23T13:52:10.175023Z",
       "attempts": []
     },
     {
@@ -178,11 +178,11 @@
         "gme_dwd_option_contract_di"
       ],
       "status": "pass",
-      "verified_at": "2026-05-23T13:36:12Z",
+      "verified_at": "2026-05-23T13:52:20Z",
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_null_rate"
       ],
-      "last_dbt_run": "2026-05-23T13:36:04.172905Z",
+      "last_dbt_run": "2026-05-23T13:52:10.175023Z",
       "attempts": []
     },
     {
@@ -201,7 +201,7 @@
       "linked_dbt_tests": [
         "test.gme_options_mart.test_dqc_reconciliation"
       ],
-      "last_dbt_run": "2026-05-23T13:36:04.172905Z",
+      "last_dbt_run": "2026-05-23T13:52:10.175023Z",
       "attempts": [
         {
           "source": "OpenBB cboe provider (obb.derivatives.options.chains, provider='cboe')",

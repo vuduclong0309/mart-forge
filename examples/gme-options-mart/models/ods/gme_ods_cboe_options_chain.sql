@@ -57,15 +57,19 @@ SELECT
     CAST(elem['percent_change'] AS DOUBLE)                            AS percent_change,
     CAST(elem['prev_day_close'] AS DOUBLE)                            AS prev_day_close,
 
-    -- Parsed from OCC symbol: {TICKER}{YYMMDD}{C/P}{8-digit strike}
+    -- Right-anchored OCC parse: last 8 = strike, preceding 1 = C/P, preceding 6 = YYMMDD
     TRY_CAST(
-        '20' || SUBSTRING(CAST(elem['option'] AS VARCHAR), 4, 2) || '-' ||
-        SUBSTRING(CAST(elem['option'] AS VARCHAR), 6, 2) || '-' ||
-        SUBSTRING(CAST(elem['option'] AS VARCHAR), 8, 2)
+        '20' || SUBSTRING(CAST(elem['option'] AS VARCHAR),
+                           LENGTH(CAST(elem['option'] AS VARCHAR)) - 14, 2) || '-' ||
+        SUBSTRING(CAST(elem['option'] AS VARCHAR),
+                  LENGTH(CAST(elem['option'] AS VARCHAR)) - 12, 2) || '-' ||
+        SUBSTRING(CAST(elem['option'] AS VARCHAR),
+                  LENGTH(CAST(elem['option'] AS VARCHAR)) - 10, 2)
     AS DATE)                                                          AS expiry,
-    CASE WHEN SUBSTRING(CAST(elem['option'] AS VARCHAR), 10, 1) = 'C'
+    CASE WHEN SUBSTRING(CAST(elem['option'] AS VARCHAR),
+                        LENGTH(CAST(elem['option'] AS VARCHAR)) - 8, 1) = 'C'
          THEN 'call' ELSE 'put' END                                   AS option_type,
-    TRY_CAST(SUBSTRING(CAST(elem['option'] AS VARCHAR), 11) AS DOUBLE)
+    TRY_CAST(RIGHT(CAST(elem['option'] AS VARCHAR), 8) AS DOUBLE)
         / 1000.0                                                      AS strike,
 
     underlying_close,

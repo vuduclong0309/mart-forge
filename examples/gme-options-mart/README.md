@@ -149,7 +149,7 @@ set -a; source .env; set +a
 | Env Var | Used By | Default | Purpose |
 |---------|---------|---------|---------|
 | `MOTHERDUCK_TOKEN` | dbt-duckdb | *(none)* | MotherDuck authentication token |
-| `GME_MOTHERDUCK_PATH` | `profiles.yml` | `md:gme_options` | MotherDuck database path for dbt |
+| `GME_MOTHERDUCK_PATH` | `profiles.yml` | `md:gme_db` | MotherDuck database path for dbt target |
 | `DBT_TARGET` | `profiles.yml` | `dev` | Active dbt target (`dev` or `motherduck`) |
 | `GME_DASHBOARD_DB_PATH` | `dashboard/app.py` | `target/gme_options.duckdb` | Dashboard warehouse connection path |
 
@@ -200,9 +200,9 @@ Set in `.env`:
 
 ```bash
 MOTHERDUCK_TOKEN=your-token-here
-GME_MOTHERDUCK_PATH=md:gme_options
+GME_MOTHERDUCK_PATH=md:gme_db
 DBT_TARGET=motherduck
-GME_DASHBOARD_DB_PATH=md:gme_options
+GME_DASHBOARD_DB_PATH=md:gme_db
 ```
 
 Then run:
@@ -218,10 +218,48 @@ streamlit run dashboard/app.py
 Or use Streamlit secrets (`.streamlit/secrets.toml`, gitignored):
 
 ```toml
-db_path = "md:gme_options"
+db_path = "md:gme_db"
 ```
 
 Credentials and tokens are masked in the dashboard UI.
+
+### MotherDuck Reset / Rebuild Runbook
+
+If the shared MotherDuck warehouse needs a clean rebuild (e.g. schema changes, stale legacy tables):
+
+**1. Archive the existing database (operator action):**
+
+```sql
+-- Connect to MotherDuck with your token
+CREATE DATABASE <archive_name> FROM <your_db>;
+-- Verify: SELECT count(*) FROM information_schema.tables WHERE table_catalog = '<archive_name>';
+```
+
+**2. Drop and recreate the target database (operator action — destructive):**
+
+```sql
+DROP DATABASE IF EXISTS <your_db>;
+CREATE DATABASE <your_db>;
+```
+
+**3. Rebuild from the current branch:**
+
+```bash
+set -a; source .env; set +a
+dbt seed --profiles-dir . --target motherduck --full-refresh
+dbt run  --profiles-dir . --target motherduck --full-refresh --vars '{"use_fixture": false}'
+dbt test --profiles-dir . --target motherduck --vars '{"use_fixture": false}'
+```
+
+**4. Verify the dashboard reads from MotherDuck:**
+
+```bash
+GME_DASHBOARD_DB_PATH=md:gme_db streamlit run dashboard/app.py
+# Smoke test in live mode:
+python dashboard/smoke_test.py --expect-source live
+```
+
+> **Warning:** Steps 1-2 are destructive operator actions. Always archive before dropping. Credentials (`MOTHERDUCK_TOKEN`) must be supplied via `.env` or environment — never committed.
 
 ### Warehouse Metadata
 
