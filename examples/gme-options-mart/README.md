@@ -52,7 +52,9 @@ Every metric card links to a free public reference site for independent verifica
 
 ### Data Source
 
-By default, the ODS reads from `fixtures/gme_ods_cboe_options_chain.parquet` — a bundled snapshot of ~1300 option contracts with full Greeks (delta, gamma, theta, vega, rho, IV). This makes the example fully offline and deterministic.
+By default, the ODS reads from `fixtures/gme_ods_cboe_options_chain.parquet` — an illustrative snapshot of 20 option contracts with full Greeks (delta, gamma, theta, vega, rho, IV). This makes the example fully offline and deterministic. See `fixtures/MANIFEST.md` for provenance, schema hash, and captured values.
+
+> **Fixture values are illustrative CI data.** The spot price (28.50) and all derived metrics in fixture mode do not represent current or historical market conditions. Set `use_fixture: false` for live delayed data from CBOE.
 
 To switch to live data, set `use_fixture: false` in `dbt_project.yml`. CBOE provides free delayed quotes (15-min lag) at `cdn.cboe.com`; the ODS model uses DuckDB's httpfs extension to read JSON directly — no API key or intermediate files needed.
 

@@ -179,11 +179,16 @@ Facts fall into two categories:
 
 #### gme_ods_cboe_options_chain
 
-- **Materialization:** Incremental (merge on `pull_date, option_symbol`)
+- **Source:** CBOE delayed quotes JSON API (httpfs) or bundled Parquet fixture
+- **Materialization:** Incremental
+- **Incremental strategy:** `delete+insert` (dbt-duckdb; `merge` is not supported by this adapter)
+- **Logical partition column:** `pull_date` (daily grain — one snapshot per trading day)
+- **Unique key:** `['pull_date', 'option_symbol']`
 - **Grain:** One row per option contract per pull date
 - **Refresh frequency:** Daily (8:45 PM ET, weekdays)
-- **Source:** CBOE delayed quotes JSON API (httpfs) or bundled Parquet fixture
 - **Pre-hook:** `http_retry_config(timeout_ms=30000, retries=3)`
+- **Backfill protocol:** Set `--var backfill:true` to bypass the incremental date filter and reprocess all historical dates. Without this flag, only rows with `pull_date >= MAX(pull_date)` from the prior build are processed.
+- **Restatement handling:** The `delete+insert` strategy on `(pull_date, option_symbol)` ensures that rerunning the same pull date replaces existing rows rather than appending duplicates. Same-day reruns are fully idempotent.
 
 | column_name | data_type | definition | example_value | calculation | data_source |
 |-------------|-----------|-----------|---------------|-------------|-------------|
@@ -219,7 +224,7 @@ Facts fall into two categories:
 | expiry | DATE | Option expiration date (parsed from OCC symbol) | 2026-06-20 | `TRY_CAST('20' \|\| SUBSTRING(CAST(elem['option'] AS VARCHAR), 4, 2) \|\| '-' \|\| SUBSTRING(CAST(elem['option'] AS VARCHAR), 6, 2) \|\| '-' \|\| SUBSTRING(CAST(elem['option'] AS VARCHAR), 8, 2) AS DATE)` | Derived from option_symbol |
 | option_type | VARCHAR | Call or put (parsed from OCC symbol) | call | `CASE WHEN SUBSTRING(CAST(elem['option'] AS VARCHAR), 10, 1) = 'C' THEN 'call' ELSE 'put' END` | Derived from option_symbol |
 | strike | DOUBLE | Strike price (parsed from OCC symbol, 8-digit / 1000) | 25.0 | `TRY_CAST(SUBSTRING(CAST(elem['option'] AS VARCHAR), 11) AS DOUBLE) / 1000.0` | Derived from option_symbol |
-| underlying_close | DOUBLE | Underlying GME closing price | 28.50 | `data.close` from top-level JSON | CBOE data.close |
+| underlying_close | DOUBLE | Underlying GME closing price | 28.50 *(fixture)* | `data.close` from top-level JSON | CBOE data.close |
 | cboe_timestamp | VARCHAR | Raw CBOE timestamp string | 2026-05-20T20:45:00-04:00 | `"timestamp"` from top-level JSON | CBOE timestamp |
 
 ### 6.2 DIM Layer
@@ -250,11 +255,16 @@ Facts fall into two categories:
 
 #### gme_dwd_option_contract_di
 
-- **Materialization:** Incremental (merge on `pull_date, option_symbol`)
+- **Source:** `gme_ods_cboe_options_chain`
+- **Materialization:** Incremental
+- **Incremental strategy:** `delete+insert` (dbt-duckdb; `merge` is not supported by this adapter)
+- **Logical partition column:** `pull_date` (daily grain — inherits from ODS)
+- **Unique key:** `['pull_date', 'option_symbol']`
 - **Grain:** One row per option contract per pull date
 - **Refresh frequency:** Daily
-- **Source:** `gme_ods_cboe_options_chain`
 - **Filters applied:** `open_interest > 0 AND strike IS NOT NULL AND DTE >= 7`
+- **Backfill protocol:** Set `--var backfill:true` to bypass the incremental date filter and reprocess all historical dates from ODS.
+- **Restatement handling:** The `delete+insert` strategy on `(pull_date, option_symbol)` ensures that rerunning the same pull date replaces existing rows. Upstream ODS restatement propagates automatically on the next DWD run.
 
 | column_name | data_type | definition | example_value | calculation | data_source |
 |-------------|-----------|-----------|---------------|-------------|-------------|
@@ -278,7 +288,7 @@ Facts fall into two categories:
 | rho | DOUBLE | Option rho | 0.02 | `ods.rho` | gme_ods_cboe_options_chain |
 | theo | DOUBLE | Theoretical value | 3.65 | `ods.theo` | gme_ods_cboe_options_chain |
 | dte | INTEGER | Days to expiry | 31 | `ods.expiry - ods.pull_date` | Derived from ODS expiry, pull_date |
-| spot | DOUBLE | Underlying close price | 28.50 | `ods.underlying_close` | gme_ods_cboe_options_chain |
+| spot | DOUBLE | Underlying close price | 28.50 *(fixture)* | `ods.underlying_close` | gme_ods_cboe_options_chain |
 | gex_contribution | DOUBLE | Per-contract gamma exposure ($) | 12345.67 | `COALESCE(gamma, 0) * COALESCE(open_interest, 0) * 100 * POWER(underlying_close, 2) * 0.01 * CASE WHEN option_type = 'call' THEN 1 ELSE -1 END` | Derived from ODS gamma, OI, underlying_close, option_type |
 | series_type | VARCHAR | Option series classification | MONTHLY | `CASE WHEN DTE > 365 THEN 'LEAP' WHEN DTE <= 7 THEN 'WEEKLY' ELSE 'MONTHLY' END` | Derived from DTE |
 | provider | VARCHAR | Data provider | cboe | `ods.provider` | gme_ods_cboe_options_chain |
@@ -321,7 +331,7 @@ Facts fall into two categories:
 |-------------|-----------|-----------|---------------|-------------|-------------|
 | pull_date | DATE | Pull date | 2026-05-20 | `DISTINCT pull_date` from DWD | gme_dwd_option_contract_di |
 | ticker | VARCHAR | Underlying ticker | GME | From DWD | gme_dwd_option_contract_di |
-| spot | DOUBLE | Underlying close price | 28.50 | `DISTINCT spot` from DWD | gme_dwd_option_contract_di |
+| spot | DOUBLE | Underlying close price | 28.50 *(fixture)* | `DISTINCT spot` from DWD | gme_dwd_option_contract_di |
 | max_pain_strike | DOUBLE | Strike minimizing total exercise pain | 27.00 | Cross-join DWD contracts; for each candidate strike, `SUM(CASE WHEN c2.option_type = 'call' AND c2.strike < c1.strike THEN (c1.strike - c2.strike) * c2.open_interest * 100 WHEN c2.option_type = 'put' AND c2.strike > c1.strike THEN (c2.strike - c1.strike) * c2.open_interest * 100 ELSE 0 END)`; select candidate with `MIN(total_pain)` via `QUALIFY ROW_NUMBER() OVER (ORDER BY total_pain ASC) = 1` | gme_dwd_option_contract_di |
 | max_pain_convergence_pct | DOUBLE | Spot-to-max-pain distance as % | 5.26 | `ROUND(ABS(spot - max_pain_strike) / spot * 100, 2)` | Derived from spot and max_pain_strike |
 | net_gex | DOUBLE | Total net GEX across all strikes | 150000.00 | `SUM(net_gex)` from strike_gex_1d | gme_dws_strike_gex_1d |
@@ -356,6 +366,7 @@ Facts fall into two categories:
 - **Grain:** One row per ticker per day
 - **Refresh frequency:** Daily
 - **Source:** `gme_social_sentiment` (seed)
+- **Provenance:** Fixture-only — this model reads from a static seed CSV with no live data provider. The seed contains illustrative social sentiment aggregates for CI/demo purposes. There is no ODS ingestion layer, no live API, and no operator-facing claim of real-time or historical accuracy. If a live social sentiment source is added in the future, an ODS provenance layer with source URL, capture timestamp, and provider attribution must be introduced before the data can be presented as operational.
 
 | column_name | data_type | definition | example_value | calculation | data_source |
 |-------------|-----------|-----------|---------------|-------------|-------------|
@@ -378,7 +389,7 @@ Facts fall into two categories:
 |-------------|-----------|-----------|---------------|-------------|-------------|
 | pull_date | DATE | Pull date (join key to all DWS + dim) | 2026-05-20 | `sn.pull_date` | gme_dws_daily_snapshot_1d |
 | ticker | VARCHAR | Underlying ticker | GME | `sn.ticker` | gme_dws_daily_snapshot_1d |
-| spot | DOUBLE | Underlying close price | 28.50 | `sn.spot` | gme_dws_daily_snapshot_1d |
+| spot | DOUBLE | Underlying close price | 28.50 *(fixture)* | `sn.spot` | gme_dws_daily_snapshot_1d |
 | year | INTEGER | Calendar year | 2026 | `d.year` | gme_dim_date |
 | quarter | INTEGER | Calendar quarter | 2 | `d.quarter` | gme_dim_date |
 | month_name | VARCHAR | Month name | May | `d.month_name` | gme_dim_date |
@@ -426,7 +437,7 @@ Facts fall into two categories:
 |-------------|-----------|-----------|---------------|-------------|-------------|
 | trade_date | DATE | Trading date | 2026-05-20 | `trade_date` | gme_underlying_closes.csv |
 | ticker | VARCHAR | Ticker symbol | GME | `ticker` | gme_underlying_closes.csv |
-| close_price | DOUBLE | Daily closing price | 28.50 | `close_price` | gme_underlying_closes.csv |
+| close_price | DOUBLE | Daily closing price | 22.55 | `close_price` | gme_underlying_closes.csv |
 
 #### gme_social_sentiment (seed)
 
@@ -438,6 +449,46 @@ Facts fall into two categories:
 | mention_count | INTEGER | Number of mentions | 1567 | `mention_count` | gme_social_sentiment.csv |
 | sentiment_score | DOUBLE | Sentiment score (−1 to +1) | 0.21 | `sentiment_score` | gme_social_sentiment.csv |
 | source_url | VARCHAR | Public reference URL for the aggregate | https://finance.yahoo.com/quote/GME/community | `source_url` | gme_social_sentiment.csv |
+
+---
+
+## 6.7 ODS/DWD Refresh Semantics Summary
+
+All incremental models in this mart use the `delete+insert` strategy, the only
+merge-capable strategy supported by dbt-duckdb. The `merge` strategy used by
+dbt-postgres/dbt-snowflake is **not available** in dbt-duckdb.
+
+| Model | Strategy | Unique Key | Partition | Backfill Var | Restatement |
+|-------|----------|-----------|-----------|--------------|-------------|
+| gme_ods_cboe_options_chain | `delete+insert` | `[pull_date, option_symbol]` | `pull_date` | `--var backfill:true` | Same-day rerun replaces rows; idempotent |
+| gme_dwd_option_contract_di | `delete+insert` | `[pull_date, option_symbol]` | `pull_date` | `--var backfill:true` | Same-day rerun replaces rows; upstream restatement propagates on next run |
+
+**Idempotence guarantee:** Running `dbt build` twice with the same source data
+produces identical row counts. The `delete+insert` strategy deletes all existing
+rows matching the incoming `unique_key` values before inserting, so duplicate
+appends are structurally impossible.
+
+**Fixture mode (`use_fixture: true`):** The ODS reads a static Parquet snapshot
+(see `fixtures/MANIFEST.md` for provenance, SHA-256 hash, and row count).
+Example values marked *(fixture)* in schema tables above come from this snapshot
+and are illustrative — they do not represent current market prices.
+On rerun, `delete+insert` removes the prior load and re-inserts the same rows.
+Row count is stable across runs.
+
+**Live mode (`use_fixture: false`):** The incremental filter
+(`WHERE pull_date >= MAX(prior pull_date)`) limits ingestion to new trading days.
+If the same day is re-pulled, `delete+insert` replaces the prior snapshot.
+
+### Social Sentiment Provenance
+
+`gme_dws_social_sentiment_1d` is a **fixture-only exception**. It reads directly
+from the `gme_social_sentiment` seed CSV with no ODS ingestion layer and no live
+data provider. The seed contains illustrative aggregates for CI and demo
+purposes only. No live or operator-facing accuracy claim is made.
+
+If a live social sentiment source is integrated in the future, an ODS provenance
+layer must be introduced with: source URL, capture timestamp, provider
+attribution, and the same `delete+insert` incremental semantics documented above.
 
 ---
 
@@ -455,6 +506,8 @@ Facts fall into two categories:
 | 6 | Duplicate Detection | No duplicate (pull_date, option_symbol) | gme_dwd_option_contract_di | 0 | error | tests/test_dqc_duplicate_detection.sql |
 | 7 | Null-Rate | Greeks (implied_vol, delta, gamma, mid_price) null rate < 5% | gme_dwd_option_contract_di | 5% | warn | tests/test_dqc_null_rate.sql |
 | 8 | Business Reconciliation | DWD row count ≤ ODS row count (proxy); GEX vs external waived | gme_dwd_option_contract_di, gme_ods_cboe_options_chain | 0.5 | warn | tests/test_dqc_reconciliation.sql |
+| 9 | Rerun Idempotence | No duplicate `(pull_date, option_symbol)` in ODS after repeated runs; proves `delete+insert` prevents row doubling | gme_ods_cboe_options_chain | 0 | error | tests/test_ods_incremental_history.sql |
+| 10 | Rerun Idempotence | No duplicate `(pull_date, option_symbol)` in DWD after repeated runs | gme_dwd_option_contract_di | 0 | error | tests/test_dwd_incremental_idempotence.sql |
 
 ### 7.2 Additional Schema Tests (models/schema.yml)
 
