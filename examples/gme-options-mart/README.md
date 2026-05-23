@@ -134,6 +134,25 @@ See `dqc_scorecard.json` for the machine-readable scorecard with full `attempts[
 
 Two deployment modes are supported. Both use the same dashboard code; the difference is the dbt pipeline configuration and warehouse backend.
 
+### Environment Variables
+
+All configuration is via environment variables. Copy `.env.example` to `.env`, fill in values, and source before running:
+
+```bash
+cp .env.example .env
+# edit .env with your values
+set -a; source .env; set +a
+```
+
+`.env` is gitignored and must never be committed. See `.env.example` for all available variables.
+
+| Env Var | Used By | Default | Purpose |
+|---------|---------|---------|---------|
+| `MOTHERDUCK_TOKEN` | dbt-duckdb | *(none)* | MotherDuck authentication token |
+| `GME_MOTHERDUCK_PATH` | `profiles.yml` | `md:gme_options` | MotherDuck database path for dbt |
+| `DBT_TARGET` | `profiles.yml` | `dev` | Active dbt target (`dev` or `motherduck`) |
+| `GME_DASHBOARD_DB_PATH` | `dashboard/app.py` | `target/gme_options.duckdb` | Dashboard warehouse connection path |
+
 ### Public Demo (fixture-backed)
 
 Safe to reveal to third parties. Data is illustrative and clearly labeled as non-current.
@@ -166,6 +185,7 @@ vars:
 **Step 2 — Run the pipeline (local DuckDB):**
 
 ```bash
+set -a; source .env; set +a   # load env vars
 dbt seed --profiles-dir .
 dbt run --profiles-dir .
 dbt test --profiles-dir .
@@ -176,21 +196,22 @@ The dashboard shows a **LIVE DATA (DELAYED)** banner with the CBOE provider URL.
 
 **Step 3 (optional) — MotherDuck shared warehouse:**
 
-Set the MotherDuck token as an environment variable (never commit it):
+Set in `.env`:
 
 ```bash
-export MOTHERDUCK_TOKEN="your-token-here"
-export GME_MOTHERDUCK_PATH="md:gme_options"   # configurable; default is md:gme_options
-export DBT_TARGET=motherduck
+MOTHERDUCK_TOKEN=your-token-here
+GME_MOTHERDUCK_PATH=md:gme_options
+DBT_TARGET=motherduck
+GME_DASHBOARD_DB_PATH=md:gme_options
+```
+
+Then run:
+
+```bash
+set -a; source .env; set +a
 dbt seed --profiles-dir . --target motherduck
 dbt run --profiles-dir . --target motherduck
 dbt test --profiles-dir . --target motherduck
-```
-
-Point the dashboard at the shared warehouse:
-
-```bash
-export GME_DASHBOARD_DB_PATH="md:gme_options"
 streamlit run dashboard/app.py
 ```
 
@@ -200,14 +221,16 @@ Or use Streamlit secrets (`.streamlit/secrets.toml`, gitignored):
 db_path = "md:gme_options"
 ```
 
-Credentials and tokens are masked in the dashboard UI. The `profiles.yml` MotherDuck target reads `GME_MOTHERDUCK_PATH` (default: `md:gme_options`). The token is supplied via `MOTHERDUCK_TOKEN` env var, never stored in config files.
+Credentials and tokens are masked in the dashboard UI.
 
-| Env Var | Used By | Default | Purpose |
-|---------|---------|---------|---------|
-| `MOTHERDUCK_TOKEN` | dbt-duckdb | *(none)* | MotherDuck authentication token |
-| `GME_MOTHERDUCK_PATH` | `profiles.yml` | `md:gme_options` | MotherDuck database path for dbt |
-| `DBT_TARGET` | `profiles.yml` | `dev` | Active dbt target (`dev` or `motherduck`) |
-| `GME_DASHBOARD_DB_PATH` | `dashboard/app.py` | `target/gme_options.duckdb` | Dashboard warehouse connection path |
+### Public Hosting
+
+For public deployment (e.g. `longshortnmargin.me`), the deployment environment provides secrets via platform env vars or secret management — never via committed files:
+
+- **Fixture/demo reveal:** Deploy with default `use_fixture: true`. The dashboard shows a clear FIXTURE / DEMO MODE banner. Safe for public audiences.
+- **Live delayed reveal:** Deploy with `use_fixture: false` and `MOTHERDUCK_TOKEN` / `GME_DASHBOARD_DB_PATH` supplied by the hosting platform. The dashboard shows a LIVE DATA (DELAYED) banner with the CBOE provider URL.
+
+The dashboard always shows: source mode, data-as-of date, warehouse connection (credentials masked), and "Educational Use Only / Not Financial Advice" text.
 
 ### Warehouse Metadata
 
