@@ -1,6 +1,7 @@
 {{
   config(
     materialized='incremental',
+    incremental_strategy='delete+insert',
     unique_key=['pull_date', 'option_symbol']
   )
 }}

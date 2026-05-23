@@ -179,11 +179,16 @@ Facts fall into two categories:
 
 #### gme_ods_cboe_options_chain
 
-- **Materialization:** Incremental (merge on `pull_date, option_symbol`)
+- **Source:** CBOE delayed quotes JSON API (httpfs) or bundled Parquet fixture
+- **Materialization:** Incremental
+- **Incremental strategy:** `delete+insert` (dbt-duckdb; `merge` is not supported by this adapter)
+- **Logical partition column:** `pull_date` (daily grain — one snapshot per trading day)
+- **Unique key:** `['pull_date', 'option_symbol']`
 - **Grain:** One row per option contract per pull date
 - **Refresh frequency:** Daily (8:45 PM ET, weekdays)
-- **Source:** CBOE delayed quotes JSON API (httpfs) or bundled Parquet fixture
 - **Pre-hook:** `http_retry_config(timeout_ms=30000, retries=3)`
+- **Backfill protocol:** Set `--var backfill:true` to bypass the incremental date filter and reprocess all historical dates. Without this flag, only rows with `pull_date >= MAX(pull_date)` from the prior build are processed.
+- **Restatement handling:** The `delete+insert` strategy on `(pull_date, option_symbol)` ensures that rerunning the same pull date replaces existing rows rather than appending duplicates. Same-day reruns are fully idempotent.
 
 | column_name | data_type | definition | example_value | calculation | data_source |
 |-------------|-----------|-----------|---------------|-------------|-------------|
@@ -250,11 +255,16 @@ Facts fall into two categories:
 
 #### gme_dwd_option_contract_di
 
-- **Materialization:** Incremental (merge on `pull_date, option_symbol`)
+- **Source:** `gme_ods_cboe_options_chain`
+- **Materialization:** Incremental
+- **Incremental strategy:** `delete+insert` (dbt-duckdb; `merge` is not supported by this adapter)
+- **Logical partition column:** `pull_date` (daily grain — inherits from ODS)
+- **Unique key:** `['pull_date', 'option_symbol']`
 - **Grain:** One row per option contract per pull date
 - **Refresh frequency:** Daily
-- **Source:** `gme_ods_cboe_options_chain`
 - **Filters applied:** `open_interest > 0 AND strike IS NOT NULL AND DTE >= 7`
+- **Backfill protocol:** Set `--var backfill:true` to bypass the incremental date filter and reprocess all historical dates from ODS.
+- **Restatement handling:** The `delete+insert` strategy on `(pull_date, option_symbol)` ensures that rerunning the same pull date replaces existing rows. Upstream ODS restatement propagates automatically on the next DWD run.
 
 | column_name | data_type | definition | example_value | calculation | data_source |
 |-------------|-----------|-----------|---------------|-------------|-------------|
@@ -356,6 +366,7 @@ Facts fall into two categories:
 - **Grain:** One row per ticker per day
 - **Refresh frequency:** Daily
 - **Source:** `gme_social_sentiment` (seed)
+- **Provenance:** Fixture-only — this model reads from a static seed CSV with no live data provider. The seed contains illustrative social sentiment aggregates for CI/demo purposes. There is no ODS ingestion layer, no live API, and no operator-facing claim of real-time or historical accuracy. If a live social sentiment source is added in the future, an ODS provenance layer with source URL, capture timestamp, and provider attribution must be introduced before the data can be presented as operational.
 
 | column_name | data_type | definition | example_value | calculation | data_source |
 |-------------|-----------|-----------|---------------|-------------|-------------|
@@ -441,6 +452,43 @@ Facts fall into two categories:
 
 ---
 
+## 6.7 ODS/DWD Refresh Semantics Summary
+
+All incremental models in this mart use the `delete+insert` strategy, the only
+merge-capable strategy supported by dbt-duckdb. The `merge` strategy used by
+dbt-postgres/dbt-snowflake is **not available** in dbt-duckdb.
+
+| Model | Strategy | Unique Key | Partition | Backfill Var | Restatement |
+|-------|----------|-----------|-----------|--------------|-------------|
+| gme_ods_cboe_options_chain | `delete+insert` | `[pull_date, option_symbol]` | `pull_date` | `--var backfill:true` | Same-day rerun replaces rows; idempotent |
+| gme_dwd_option_contract_di | `delete+insert` | `[pull_date, option_symbol]` | `pull_date` | `--var backfill:true` | Same-day rerun replaces rows; upstream restatement propagates on next run |
+
+**Idempotence guarantee:** Running `dbt build` twice with the same source data
+produces identical row counts. The `delete+insert` strategy deletes all existing
+rows matching the incoming `unique_key` values before inserting, so duplicate
+appends are structurally impossible.
+
+**Fixture mode (`use_fixture: true`):** The ODS reads a static Parquet snapshot.
+On rerun, `delete+insert` removes the prior load and re-inserts the same rows.
+Row count is stable across runs.
+
+**Live mode (`use_fixture: false`):** The incremental filter
+(`WHERE pull_date >= MAX(prior pull_date)`) limits ingestion to new trading days.
+If the same day is re-pulled, `delete+insert` replaces the prior snapshot.
+
+### Social Sentiment Provenance
+
+`gme_dws_social_sentiment_1d` is a **fixture-only exception**. It reads directly
+from the `gme_social_sentiment` seed CSV with no ODS ingestion layer and no live
+data provider. The seed contains illustrative aggregates for CI and demo
+purposes only. No live or operator-facing accuracy claim is made.
+
+If a live social sentiment source is integrated in the future, an ODS provenance
+layer must be introduced with: source URL, capture timestamp, provider
+attribution, and the same `delete+insert` incremental semantics documented above.
+
+---
+
 ## 7. DQC Plan
 
 ### 7.1 Control Catalog
@@ -455,6 +503,8 @@ Facts fall into two categories:
 | 6 | Duplicate Detection | No duplicate (pull_date, option_symbol) | gme_dwd_option_contract_di | 0 | error | tests/test_dqc_duplicate_detection.sql |
 | 7 | Null-Rate | Greeks (implied_vol, delta, gamma, mid_price) null rate < 5% | gme_dwd_option_contract_di | 5% | warn | tests/test_dqc_null_rate.sql |
 | 8 | Business Reconciliation | DWD row count ≤ ODS row count (proxy); GEX vs external waived | gme_dwd_option_contract_di, gme_ods_cboe_options_chain | 0.5 | warn | tests/test_dqc_reconciliation.sql |
+| 9 | Rerun Idempotence | No duplicate `(pull_date, option_symbol)` in ODS after repeated runs; proves `delete+insert` prevents row doubling | gme_ods_cboe_options_chain | 0 | error | tests/test_ods_incremental_history.sql |
+| 10 | Rerun Idempotence | No duplicate `(pull_date, option_symbol)` in DWD after repeated runs | gme_dwd_option_contract_di | 0 | error | tests/test_dwd_incremental_idempotence.sql |
 
 ### 7.2 Additional Schema Tests (models/schema.yml)
 
