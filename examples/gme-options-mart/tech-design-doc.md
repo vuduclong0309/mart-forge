@@ -394,7 +394,7 @@ Facts fall into two categories:
 |-------------|-----------|-----------|---------------|-------------|-------------|
 | pull_date | DATE | Pull date | 2026-05-20 | `pull_date` from snapshot_1d | gme_dws_daily_snapshot_1d |
 | ticker | VARCHAR | Underlying ticker | GME | `ticker` from snapshot_1d | gme_dws_daily_snapshot_1d |
-| avg_spot_7d | DOUBLE | 7-day trailing average spot | 28.50 | `ROUND(AVG(spot) OVER w, 4)` | gme_dws_daily_snapshot_1d |
+| avg_spot_7d | DOUBLE | 7-day trailing average spot | 28.50 *(fixture)* | `ROUND(AVG(spot) OVER w, 4)` | gme_dws_daily_snapshot_1d |
 | min_spot_7d | DOUBLE | 7-day trailing minimum spot | 27.80 | `ROUND(MIN(spot) OVER w, 4)` | gme_dws_daily_snapshot_1d |
 | max_spot_7d | DOUBLE | 7-day trailing maximum spot | 29.10 | `ROUND(MAX(spot) OVER w, 4)` | gme_dws_daily_snapshot_1d |
 | spot_return_pct_7d | DOUBLE | 7-day spot return (%) | 2.50 | `ROUND((spot - FIRST_VALUE(spot) OVER w) / NULLIF(FIRST_VALUE(spot) OVER w, 0) * 100, 2)` | gme_dws_daily_snapshot_1d |
@@ -466,7 +466,7 @@ Facts fall into two categories:
 | iv_percentile | DOUBLE | IV percentile (252-session) | 0.8200 | `m.iv_percentile` | gme_dws_options_metrics_1d |
 | social_mention_count | BIGINT | Social media mentions | 150 | `ss.social_mention_count` | gme_dws_social_sentiment_1d |
 | social_sentiment_score | DOUBLE | Weighted sentiment score | 0.3200 | `ss.social_sentiment_score` | gme_dws_social_sentiment_1d |
-| avg_spot_7d | DOUBLE | 7-day trailing average spot | 28.50 | `t7.avg_spot_7d` | gme_dws_market_trends_7d |
+| avg_spot_7d | DOUBLE | 7-day trailing average spot | 28.50 *(fixture)* | `t7.avg_spot_7d` | gme_dws_market_trends_7d |
 | min_spot_7d | DOUBLE | 7-day trailing min spot | 27.80 | `t7.min_spot_7d` | gme_dws_market_trends_7d |
 | max_spot_7d | DOUBLE | 7-day trailing max spot | 29.10 | `t7.max_spot_7d` | gme_dws_market_trends_7d |
 | spot_return_pct_7d | DOUBLE | 7-day spot return % | 2.50 | `t7.spot_return_pct_7d` | gme_dws_market_trends_7d |

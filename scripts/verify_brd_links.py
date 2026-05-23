@@ -190,7 +190,11 @@ def main():
         "results": results,
     }
 
-    output_path = "/Users/emberlockpc/Git/mart-forge/examples/gme-options-mart/brd_link_verification.json"
+    import os
+    output_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "examples", "gme-options-mart", "brd_link_verification.json",
+    )
     with open(output_path, "w") as f:
         json.dump(report, f, indent=2)
 
