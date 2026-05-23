@@ -60,7 +60,7 @@ dbt run --profiles-dir .
 dbt test --profiles-dir .
 ```
 
-> The fixture is controlled by `use_fixture: true` in `dbt_project.yml`. Set it to `false` to pull live delayed data from CBOE instead (requires network access).
+> The fixture is controlled by `use_fixture: true` in `dbt_project.yml`. Set it to `false` to pull live delayed data from CBOE instead (requires network access). All fixture values (including the spot price) are illustrative CI data — see `fixtures/MANIFEST.md` for provenance. The dashboard shows a warning banner in fixture mode.
 
 ### Build Your Own Mart
 

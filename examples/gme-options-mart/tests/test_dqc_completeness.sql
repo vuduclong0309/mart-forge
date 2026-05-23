@@ -11,6 +11,12 @@ with checks as (
     union all
     select 'dws_daily_snapshot', count(*), 1
     from {{ ref('gme_dws_daily_snapshot_1d') }}
+    union all
+    select 'dws_market_trends_7d', count(*), 1
+    from {{ ref('gme_dws_market_trends_7d') }}
+    union all
+    select 'dws_market_trends_30d', count(*), 1
+    from {{ ref('gme_dws_market_trends_30d') }}
 )
 select model, cnt, min_expected
 from checks

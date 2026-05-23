@@ -208,6 +208,98 @@ models:
       - name: social_sentiment_score
         description: "Mention-weighted average sentiment score (-1 to 1)."
 
+  - name: gme_dws_market_trends_7d
+    description: >
+      7-day trailing-window aggregates for dashboard trend charts.
+      Grain: one row per pull_date per ticker.
+      Uses observation-based windows (ROWS BETWEEN 6 PRECEDING AND CURRENT ROW).
+      With limited fixture history, observation_count_7d may be less than 7.
+    columns:
+      - name: pull_date
+        data_tests:
+          - not_null
+          - unique
+      - name: ticker
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["GME"]
+      - name: avg_spot_7d
+        description: "7-day trailing average spot price."
+        data_tests:
+          - not_null
+      - name: min_spot_7d
+        description: "7-day trailing minimum spot price."
+        data_tests:
+          - not_null
+      - name: max_spot_7d
+        description: "7-day trailing maximum spot price."
+        data_tests:
+          - not_null
+      - name: spot_return_pct_7d
+        description: "Spot price return over the 7-day window (%)."
+      - name: avg_net_gex_7d
+        description: "7-day trailing average total net GEX."
+      - name: avg_iv30_7d
+        description: "7-day trailing average IV30."
+      - name: avg_pc_ratio_7d
+        description: "7-day trailing average put/call ratio."
+      - name: avg_dealer_net_gamma_7d
+        description: "7-day trailing average dealer net gamma."
+      - name: avg_hv20_7d
+        description: "7-day trailing average HV20."
+      - name: observation_count_7d
+        description: "Number of trading-day observations in the 7-day window."
+        data_tests:
+          - not_null
+
+  - name: gme_dws_market_trends_30d
+    description: >
+      30-day trailing-window aggregates for dashboard trend charts.
+      Grain: one row per pull_date per ticker.
+      Uses observation-based windows (ROWS BETWEEN 29 PRECEDING AND CURRENT ROW).
+      With limited fixture history, observation_count_30d may be less than 30.
+    columns:
+      - name: pull_date
+        data_tests:
+          - not_null
+          - unique
+      - name: ticker
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["GME"]
+      - name: avg_spot_30d
+        description: "30-day trailing average spot price."
+        data_tests:
+          - not_null
+      - name: min_spot_30d
+        description: "30-day trailing minimum spot price."
+        data_tests:
+          - not_null
+      - name: max_spot_30d
+        description: "30-day trailing maximum spot price."
+        data_tests:
+          - not_null
+      - name: spot_return_pct_30d
+        description: "Spot price return over the 30-day window (%)."
+      - name: avg_net_gex_30d
+        description: "30-day trailing average total net GEX."
+      - name: avg_iv30_30d
+        description: "30-day trailing average IV30."
+      - name: avg_pc_ratio_30d
+        description: "30-day trailing average put/call ratio."
+      - name: avg_dealer_net_gamma_30d
+        description: "30-day trailing average dealer net gamma."
+      - name: avg_hv20_30d
+        description: "30-day trailing average HV20."
+      - name: observation_count_30d
+        description: "Number of trading-day observations in the 30-day window."
+        data_tests:
+          - not_null
+
   # --- ADS Layer ---
   - name: gme_ads_market_dashboard
     description: >
@@ -244,3 +336,23 @@ models:
         description: "Total social mentions from seed fixture (NULL when no sentiment data for the day)."
       - name: social_sentiment_score
         description: "Mention-weighted average sentiment score (-1 to 1). NULL when no sentiment data for the day."
+      - name: avg_spot_7d
+        description: "7-day trailing average spot price."
+      - name: avg_net_gex_7d
+        description: "7-day trailing average net GEX."
+      - name: avg_iv30_7d
+        description: "7-day trailing average IV30."
+      - name: avg_pc_ratio_7d
+        description: "7-day trailing average put/call ratio."
+      - name: observation_count_7d
+        description: "Number of observations in the 7-day trailing window."
+      - name: avg_spot_30d
+        description: "30-day trailing average spot price."
+      - name: avg_net_gex_30d
+        description: "30-day trailing average net GEX."
+      - name: avg_iv30_30d
+        description: "30-day trailing average IV30."
+      - name: avg_pc_ratio_30d
+        description: "30-day trailing average put/call ratio."
+      - name: observation_count_30d
+        description: "Number of observations in the 30-day trailing window."
