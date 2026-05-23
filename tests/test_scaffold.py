@@ -124,8 +124,8 @@ not_applicable rationale: No performance/ratio metrics required for this basic o
 | column_name | data_type | definition | example_value | calculation | data_source | BRD_ref | link_status |
 |-------------|-----------|------------|---------------|-------------|-------------|---------|-------------|
 | calendar_date | DATE | Date context | 2020-01-01 | dim_date.calendar_date via join | dim_date | - | exact |
-| order_count | BIGINT | Daily orders | 3 | dws.order_count via join | DWS | M-1 | exact |
-| daily_revenue | DECIMAL | Daily revenue | 325.75 | dws.daily_revenue via join | DWS | M-2 | proxy |
+| order_count | BIGINT | Daily orders | 3 | dws.order_count via join | DWS | M-2 | proxy |
+| daily_revenue | DECIMAL | Daily revenue | 325.75 | dws.daily_revenue via join | DWS | M-1 | exact |
 
 ## T-12. Physical Design
 Column-level specs provided in T-6 through T-11.
@@ -524,6 +524,188 @@ class TestSignOffDetection:
 
     def test_missing_doc_not_signed(self, tmp_path):
         assert not _is_signed(tmp_path / "nonexistent.md")
+
+
+class TestDesignBypassRejection:
+    """Exact negative regression: long N/A prose for required layers,
+    empty ADS column header, and token text for T-12/T-16 must be rejected."""
+
+    BYPASS_TDD = """\
+# Technical Design Document — Test Mart
+
+## T-1. Version History
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 0.1 | 2026-01-01 | Test | Initial |
+
+## T-2. Design Reasoning
+Grain: one row per order line per day.
+
+## T-3. Table Summary
+| Table Name | Layer | Purpose | Grain | Materialization |
+|------------|-------|---------|-------|-----------------|
+| tst_ods_csv_sample | ODS | Raw ingestion | one row per record per pull_date | incremental |
+
+## T-4. Data Architecture Diagram
+ODS -> DWD -> DWS -> ADS, DIM referenced by DWD.
+
+## T-5. Column Specification
+Per-table specs follow in T-6 through T-11.
+
+## T-6. ODS Table Design
+
+not_applicable rationale: This layer will be implemented in a later iteration after source discovery confirms the ingestion pattern. Signed off by design authority.
+
+## T-7. Dimension Table Design
+
+not_applicable rationale: Date dimension will be sourced from an enterprise calendar service rather than local seed. Out of scope for this design iteration. Signed off.
+
+## T-8. Fact Table Design (DWD)
+
+not_applicable rationale: The fact grain depends on the ODS layer finalization. This section is deferred to the next design increment pending source confirmation. Signed off by design authority.
+
+## T-9. Count Aggregation Design (DWS)
+
+not_applicable rationale: Count aggregations require a finalized DWD layer. This section is deferred pending the fact table design. Reviewed and signed off.
+
+## T-10. Performance Aggregation Design (DWS)
+
+not_applicable rationale: No performance/ratio metrics required for this basic order mart. All metrics are count and sum aggregations covered in T-9. Signed off.
+
+## T-11. Presentation Table Design (ADS)
+
+| column_name | data_type | definition | example_value | calculation | data_source | BRD_ref | link_status |
+|-------------|-----------|------------|---------------|-------------|-------------|---------|-------------|
+
+## T-12. Physical Design
+TBD
+
+## T-13. Implementation Specification
+dbt model configuration per naming conventions.
+
+## T-14. DQC Plan
+All 8 control classes addressed per control catalog.
+
+## T-15. Test Inventory
+| Test Name | Type | Target Model |
+|-----------|------|-------------|
+| not_null_record_id | generic | ods |
+
+## T-16. Operations
+TBD
+
+## T-17. Known Limitations
+No external data sources for reconciliation.
+
+Sign-off: APPROVED
+Grade: A
+"""
+
+    def test_rejects_na_required_layers(self, mart_dir):
+        """ODS (T-6) and DWD (T-8) are required layers and cannot be N/A."""
+        mart_dir.mkdir()
+        (mart_dir / "brd.md").write_text(VALID_BRD)
+        (mart_dir / "tdd.md").write_text(self.BYPASS_TDD)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"], "Scaffold accepted TDD with N/A for required layers"
+        error_text = " ".join(result["errors"])
+        assert "T-6" in error_text, "Missing rejection for T-6 (ODS) N/A"
+        assert "T-8" in error_text, "Missing rejection for T-8 (DWD) N/A"
+
+    def test_rejects_empty_ads_column_header(self, mart_dir):
+        """ADS (T-11) with column header but no data rows must be rejected."""
+        mart_dir.mkdir()
+        (mart_dir / "brd.md").write_text(VALID_BRD)
+        (mart_dir / "tdd.md").write_text(self.BYPASS_TDD)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"]
+        assert any("T-11" in e for e in result["errors"]), "Missing rejection for T-11 (ADS) empty data"
+
+    def test_rejects_token_t12_t16(self, mart_dir):
+        """T-12 and T-16 with token text ('TBD') must be rejected."""
+        mart_dir.mkdir()
+        (mart_dir / "brd.md").write_text(VALID_BRD)
+        (mart_dir / "tdd.md").write_text(self.BYPASS_TDD)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"]
+        error_text = " ".join(result["errors"])
+        assert "T-12" in error_text, "Missing rejection for T-12 token text"
+        assert "T-16" in error_text, "Missing rejection for T-16 token text"
+
+    def test_no_models_emitted_on_bypass(self, mart_dir):
+        """No files should be created when bypass TDD is rejected."""
+        mart_dir.mkdir()
+        (mart_dir / "brd.md").write_text(VALID_BRD)
+        (mart_dir / "tdd.md").write_text(self.BYPASS_TDD)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"]
+        assert result["files_created"] == []
+
+
+class TestContractBinding:
+    """Contract file must be generated and reflect BRD/TDD signed design."""
+
+    def test_mart_contract_created(self, signed_mart):
+        result = scaffold(signed_mart, "test-mart", "tst")
+        assert result["success"]
+        contract_path = signed_mart / "mart_contract.json"
+        assert contract_path.exists()
+        assert "mart_contract.json" in result["files_created"]
+
+    def test_contract_metrics_match_brd(self, signed_mart):
+        scaffold(signed_mart, "test-mart", "tst")
+        contract = json.loads((signed_mart / "mart_contract.json").read_text())
+        metrics = contract["metrics"]
+        assert len(metrics) == 2
+        m1 = next(m for m in metrics if m["id"] == "M-1")
+        m2 = next(m for m in metrics if m["id"] == "M-2")
+        assert m1["link_status"] == "exact"
+        assert m2["link_status"] == "proxy"
+        assert m1["ads_column"] == "daily_revenue"
+        assert m2["ads_column"] == "order_count"
+
+    def test_contract_rejects_metric_mismatch(self, mart_dir):
+        """TDD link_status must match BRD link_status for each metric."""
+        mart_dir.mkdir()
+        mismatched_tdd = VALID_TDD.replace(
+            "| order_count | BIGINT | Daily orders | 3 | dws.order_count via join | DWS | M-2 | proxy |",
+            "| order_count | BIGINT | Daily orders | 3 | dws.order_count via join | DWS | M-2 | exact |",
+        )
+        (mart_dir / "brd.md").write_text(VALID_BRD)
+        (mart_dir / "tdd.md").write_text(mismatched_tdd)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"]
+        assert any("mismatch" in e.lower() for e in result["errors"])
+
+    def test_dashboard_uses_contracted_metrics(self, signed_mart):
+        scaffold(signed_mart, "test-mart", "tst")
+        dash = (signed_mart / "dashboard" / "app.py").read_text()
+        assert "CONTRACTED_METRICS" in dash
+        assert '"M-1"' in dash
+        assert '"M-2"' in dash
+        assert "Avg Order Value" not in dash
+
+    def test_dashboard_no_unsupported_on_error(self, signed_mart):
+        scaffold(signed_mart, "test-mart", "tst")
+        dash = (signed_mart / "dashboard" / "app.py").read_text()
+        assert "render_error_badge" in dash
+        assert "Data unavailable" in dash
+
+
+class TestMetricMappingValidation:
+    """BRD metrics must map to ADS columns with consistent link_status."""
+
+    def test_rejects_missing_metric_mapping(self, mart_dir):
+        mart_dir.mkdir()
+        tdd_no_mapping = VALID_TDD.replace(
+            "| order_count | BIGINT | Daily orders | 3 | dws.order_count via join | DWS | M-2 | proxy |",
+            "| order_count | BIGINT | Daily orders | 3 | dws.order_count via join | DWS | - | proxy |",
+        )
+        (mart_dir / "brd.md").write_text(VALID_BRD)
+        (mart_dir / "tdd.md").write_text(tdd_no_mapping)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"]
+        assert any("M-2" in e and "no mapping" in e.lower() for e in result["errors"])
 
 
 class TestNameSanitization:

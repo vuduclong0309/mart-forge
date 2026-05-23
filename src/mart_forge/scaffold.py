@@ -8,7 +8,10 @@ Enforces structural contract validation:
 - No unverified link_status at sign-off
 - Each metric must declare valid source_type and resolved link_status
 - Bare heading vocabulary and bare N/A tokens rejected
-- Produces a complete, runnable dbt project with SQL models, DQC assets, and dashboard
+- Required layers (ODS/DWD/ADS) must have populated column specs — N/A rejected
+- T-3/T-12/T-14/T-16 must have substantive content (not token text)
+- BRD metric-to-ADS mapping validated for completeness and link_status consistency
+- Produces a contract-bound dbt project with SQL models, DQC assets, and dashboard
 """
 
 import json
@@ -45,6 +48,15 @@ TABLE_SECTIONS = {
     "T-9": {"label": "DWS-Count", "extra": []},
     "T-10": {"label": "DWS-Perf", "extra": []},
     "T-11": {"label": "ADS", "extra": ["BRD"]},
+}
+
+REQUIRED_LAYER_SECTIONS = {"T-6", "T-8", "T-11"}
+
+CONTENT_SECTIONS = {
+    "T-3": "Table Summary",
+    "T-12": "Physical Design",
+    "T-14": "DQC Plan",
+    "T-16": "Operations",
 }
 
 
@@ -88,6 +100,94 @@ def _section_has_content(section_text: str, heading: str) -> bool:
         and not l.strip().startswith("---")
     ]
     return len(content_lines) >= 1
+
+
+def _section_has_substantive_content(section_text: str) -> bool:
+    for line in section_text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("---"):
+            continue
+        clean = re.sub(r"[*_#|{}\-`]", "", stripped).strip()
+        if len(clean) >= 15:
+            return True
+    return False
+
+
+def _count_table_data_rows(section_text: str) -> int:
+    table_lines = [
+        l for l in section_text.splitlines()
+        if "|" in l and l.strip().startswith("|")
+    ]
+    count = 0
+    for line in table_lines:
+        if re.match(r"^\s*\|[\s\-|]+\|\s*$", line):
+            continue
+        if "column_name" in line.lower() and "data_type" in line.lower():
+            continue
+        count += 1
+    return count
+
+
+def _parse_brd_metrics(brd_path: Path) -> list[dict]:
+    content = brd_path.read_text()
+    b3_text = _extract_section(content, "B-3", "B-4")
+    metrics = []
+    for line in b3_text.splitlines():
+        if "|" not in line or not line.strip().startswith("|"):
+            continue
+        if re.match(r"^\s*\|[\s\-|]+\|\s*$", line):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 4:
+            continue
+        if "metric" in cells[0].lower() and ("source_type" in cells[1].lower() or "link_status" in cells[2].lower()):
+            continue
+        m = re.match(r"(M-\d+)\s*(.*)", cells[0].strip())
+        if m:
+            metrics.append({
+                "id": m.group(1),
+                "name": m.group(2).strip(),
+                "source_type": cells[1].strip().lower(),
+                "link_status": cells[2].strip().lower(),
+                "definition": cells[3].strip() if len(cells) > 3 else "",
+            })
+    return metrics
+
+
+def _parse_ads_metric_map(tdd_path: Path) -> dict:
+    content = tdd_path.read_text()
+    ads_text = _extract_section(content, "T-11", "T-12")
+    if not ads_text:
+        return {}
+
+    result = {}
+    table_lines = [
+        l for l in ads_text.splitlines()
+        if "|" in l and l.strip().startswith("|")
+    ]
+    if len(table_lines) < 2:
+        return {}
+
+    headers = [h.strip().lower() for h in table_lines[0].strip().strip("|").split("|")]
+    col_idx = {h: i for i, h in enumerate(headers)}
+
+    brd_col = col_idx.get("brd_ref", col_idx.get("brd", None))
+    link_col = col_idx.get("link_status", None)
+    name_col = col_idx.get("column_name", 0)
+
+    for line in table_lines[1:]:
+        if re.match(r"^\s*\|[\s\-|]+\|\s*$", line):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+
+        col_name = cells[name_col] if name_col < len(cells) else ""
+        brd_ref = cells[brd_col] if brd_col is not None and brd_col < len(cells) else ""
+        link_status = cells[link_col] if link_col is not None and link_col < len(cells) else ""
+
+        if brd_ref and brd_ref != "-" and re.match(r"M-\d+", brd_ref):
+            result[brd_ref] = {"column": col_name, "link_status": link_status.lower()}
+
+    return result
 
 
 def _validate_brd(brd_path: Path) -> list[str]:
@@ -160,6 +260,13 @@ def _validate_tdd(tdd_path: Path) -> list[str]:
         if section not in content:
             errors.append(f"TDD missing mandatory section {section}.")
 
+    for section_id, label in CONTENT_SECTIONS.items():
+        next_num = int(section_id.split("-")[1]) + 1
+        next_section = f"T-{next_num}"
+        section_text = _extract_section(content, section_id, next_section)
+        if not section_text or not _section_has_substantive_content(section_text):
+            errors.append(f"TDD {section_id} ({label}) requires substantive content, not just a heading or token text.")
+
     has_any_table = False
     for section_label, spec in TABLE_SECTIONS.items():
         next_num = int(section_label.split("-")[1]) + 1
@@ -172,6 +279,19 @@ def _validate_tdd(tdd_path: Path) -> list[str]:
 
         has_column_spec = "column_name" in section_text
         has_na = "not_applicable" in section_text.lower()
+
+        if section_label in REQUIRED_LAYER_SECTIONS and not has_column_spec:
+            if has_na:
+                errors.append(
+                    f"TDD {section_label} ({spec['label']}) cannot be N/A — "
+                    f"this layer is required and must have populated column specs."
+                )
+            else:
+                errors.append(
+                    f"TDD {section_label} ({spec['label']}) missing column specification table — "
+                    f"this layer is required."
+                )
+            continue
 
         if not has_column_spec and has_na:
             na_line_idx = None
@@ -195,6 +315,12 @@ def _validate_tdd(tdd_path: Path) -> list[str]:
             errors.append(f"TDD {section_label} ({spec['label']}) missing column specification table.")
             continue
 
+        if has_column_spec and _count_table_data_rows(section_text) < 1:
+            errors.append(
+                f"TDD {section_label} ({spec['label']}) has column spec header but no populated data rows."
+            )
+            continue
+
         has_any_table = True
         for field in COLUMN_SPEC_FIELDS:
             if field not in section_text:
@@ -213,10 +339,39 @@ def _validate_tdd(tdd_path: Path) -> list[str]:
     return errors
 
 
+def _validate_metric_mapping(brd_path: Path, tdd_path: Path) -> list[str]:
+    errors = []
+    brd_metrics = _parse_brd_metrics(brd_path)
+    if not brd_metrics:
+        return errors
+
+    ads_map = _parse_ads_metric_map(tdd_path)
+    if not ads_map:
+        return errors
+
+    for metric in brd_metrics:
+        mid = metric["id"]
+        if mid not in ads_map:
+            errors.append(f"BRD metric {mid} ({metric['name']}) has no mapping in TDD T-11 (ADS).")
+        else:
+            tdd_ls = ads_map[mid]["link_status"]
+            brd_ls = metric["link_status"]
+            if tdd_ls and brd_ls and tdd_ls != brd_ls:
+                errors.append(
+                    f"Metric {mid} link_status mismatch: BRD says '{brd_ls}', TDD T-11 says '{tdd_ls}'."
+                )
+
+    return errors
+
+
 def _check_gates(mart_dir: Path) -> list[str]:
     errors = []
-    errors.extend(_validate_brd(mart_dir / "brd.md"))
-    errors.extend(_validate_tdd(mart_dir / "tdd.md"))
+    brd_path = mart_dir / "brd.md"
+    tdd_path = mart_dir / "tdd.md"
+    errors.extend(_validate_brd(brd_path))
+    errors.extend(_validate_tdd(tdd_path))
+    if brd_path.exists() and tdd_path.exists():
+        errors.extend(_validate_metric_mapping(brd_path, tdd_path))
     return errors
 
 
@@ -232,6 +387,33 @@ def scaffold(mart_dir: Path, mart_name: str, prefix: str) -> dict:
     files_created = []
 
     safe_name = _sanitize_name(mart_name)
+
+    brd_metrics = _parse_brd_metrics(mart_dir / "brd.md")
+    ads_map = _parse_ads_metric_map(mart_dir / "tdd.md")
+    contract_metrics = []
+    for m in brd_metrics:
+        mid = m["id"]
+        ads_info = ads_map.get(mid, {})
+        contract_metrics.append({
+            "id": mid,
+            "name": m["name"],
+            "source_type": m["source_type"],
+            "link_status": m["link_status"],
+            "ads_column": ads_info.get("column", ""),
+        })
+
+    contract = {
+        "mart": {"name": mart_name, "prefix": prefix, "version": "1.0"},
+        "metrics": contract_metrics,
+        "fixture": {
+            "enabled": True,
+            "seed_domain": "order-revenue",
+            "note": "CI smoke data only — replace with domain seeds for production",
+        },
+    }
+    contract_path = mart_dir / "mart_contract.json"
+    contract_path.write_text(json.dumps(contract, indent=2))
+    files_created.append("mart_contract.json")
 
     # dbt_project.yml
     dbt_project = mart_dir / "dbt_project.yml"
@@ -321,53 +503,54 @@ def scaffold(mart_dir: Path, mart_name: str, prefix: str) -> dict:
         f"    description: 'ODS layer — raw ingestion from sample CSV'\n"
         f"    columns:\n"
         f"      - name: record_id\n"
-        f"        tests:\n"
+        f"        data_tests:\n"
         f"          - not_null\n"
         f"      - name: pull_date\n"
-        f"        tests:\n"
+        f"        data_tests:\n"
         f"          - not_null\n\n"
         f"  - name: {dim_model}\n"
         f"    description: 'Date dimension (seed-backed)'\n"
         f"    columns:\n"
         f"      - name: date_sk\n"
-        f"        tests:\n"
+        f"        data_tests:\n"
         f"          - not_null\n\n"
         f"  - name: {dwd_model}\n"
         f"    description: 'DWD fact — daily order line detail'\n"
         f"    columns:\n"
         f"      - name: order_line_sk\n"
-        f"        tests:\n"
+        f"        data_tests:\n"
         f"          - not_null\n"
         f"          - unique\n"
         f"      - name: date_key\n"
-        f"        tests:\n"
+        f"        data_tests:\n"
         f"          - not_null\n"
         f"          - relationships:\n"
-        f"              to: ref('{dim_model}')\n"
-        f"              field: date_sk\n\n"
+        f"              arguments:\n"
+        f"                to: ref('{dim_model}')\n"
+        f"                field: date_sk\n\n"
         f"  - name: {dws_model}\n"
         f"    description: 'DWS — daily revenue aggregation'\n"
         f"    columns:\n"
         f"      - name: date_key\n"
-        f"        tests:\n"
+        f"        data_tests:\n"
         f"          - not_null\n"
         f"      - name: order_count\n"
-        f"        tests:\n"
+        f"        data_tests:\n"
         f"          - not_null\n"
         f"      - name: daily_revenue\n"
-        f"        tests:\n"
+        f"        data_tests:\n"
         f"          - not_null\n\n"
         f"  - name: {ads_model}\n"
         f"    description: 'ADS — executive dashboard OBT'\n"
         f"    columns:\n"
         f"      - name: calendar_date\n"
-        f"        tests:\n"
+        f"        data_tests:\n"
         f"          - not_null\n"
         f"      - name: order_count\n"
-        f"        tests:\n"
+        f"        data_tests:\n"
         f"          - not_null\n"
         f"      - name: daily_revenue\n"
-        f"        tests:\n"
+        f"        data_tests:\n"
         f"          - not_null\n\n"
         f"seeds:\n"
         f"  - name: raw_sample_data\n"
@@ -377,7 +560,7 @@ def scaffold(mart_dir: Path, mart_name: str, prefix: str) -> dict:
     )
     files_created.append("models/schema.yml")
 
-    # Dashboard — render template with mart_name, prefix, db_name substitution
+    # Dashboard — render template with contract metrics injection
     dash_dir = mart_dir / "dashboard"
     dash_dir.mkdir(exist_ok=True)
     dash_template = templates_dir / "dashboard" / "app.py"
@@ -386,6 +569,8 @@ def scaffold(mart_dir: Path, mart_name: str, prefix: str) -> dict:
         dash_content = dash_content.replace("{mart_name}", mart_name)
         dash_content = dash_content.replace("{prefix}", prefix)
         dash_content = dash_content.replace("{db_name}", safe_name)
+        contract_metrics_str = json.dumps(contract_metrics, indent=4)
+        dash_content = dash_content.replace("{contract_metrics}", contract_metrics_str)
         (dash_dir / "app.py").write_text(dash_content)
     files_created.append("dashboard/app.py")
 
