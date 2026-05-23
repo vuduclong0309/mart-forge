@@ -223,15 +223,6 @@ db_path = "md:gme_options"
 
 Credentials and tokens are masked in the dashboard UI.
 
-### Public Hosting
-
-For public deployment (e.g. `longshortnmargin.me`), the deployment environment provides secrets via platform env vars or secret management — never via committed files:
-
-- **Fixture/demo reveal:** Deploy with default `use_fixture: true`. The dashboard shows a clear FIXTURE / DEMO MODE banner. Safe for public audiences.
-- **Live delayed reveal:** Deploy with `use_fixture: false` and `MOTHERDUCK_TOKEN` / `GME_DASHBOARD_DB_PATH` supplied by the hosting platform. The dashboard shows a LIVE DATA (DELAYED) banner with the CBOE provider URL.
-
-The dashboard always shows: source mode, data-as-of date, warehouse connection (credentials masked), and "Educational Use Only / Not Financial Advice" text.
-
 ### Warehouse Metadata
 
 The `gme_ads_warehouse_metadata` model records the source mode (`fixture` or `live`), provider label, and provider URL at dbt-build time. The dashboard reads this table to determine the data source — it no longer relies solely on `dbt_project.yml` at runtime. Older databases without this table trigger an **unknown/stale** warning.
