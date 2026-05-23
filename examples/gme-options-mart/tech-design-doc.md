@@ -224,7 +224,7 @@ Facts fall into two categories:
 | expiry | DATE | Option expiration date (parsed from OCC symbol) | 2026-06-20 | `TRY_CAST('20' \|\| SUBSTRING(CAST(elem['option'] AS VARCHAR), 4, 2) \|\| '-' \|\| SUBSTRING(CAST(elem['option'] AS VARCHAR), 6, 2) \|\| '-' \|\| SUBSTRING(CAST(elem['option'] AS VARCHAR), 8, 2) AS DATE)` | Derived from option_symbol |
 | option_type | VARCHAR | Call or put (parsed from OCC symbol) | call | `CASE WHEN SUBSTRING(CAST(elem['option'] AS VARCHAR), 10, 1) = 'C' THEN 'call' ELSE 'put' END` | Derived from option_symbol |
 | strike | DOUBLE | Strike price (parsed from OCC symbol, 8-digit / 1000) | 25.0 | `TRY_CAST(SUBSTRING(CAST(elem['option'] AS VARCHAR), 11) AS DOUBLE) / 1000.0` | Derived from option_symbol |
-| underlying_close | DOUBLE | Underlying GME closing price | 28.50 | `data.close` from top-level JSON | CBOE data.close |
+| underlying_close | DOUBLE | Underlying GME closing price | 28.50 *(fixture)* | `data.close` from top-level JSON | CBOE data.close |
 | cboe_timestamp | VARCHAR | Raw CBOE timestamp string | 2026-05-20T20:45:00-04:00 | `"timestamp"` from top-level JSON | CBOE timestamp |
 
 ### 6.2 DIM Layer
@@ -288,7 +288,7 @@ Facts fall into two categories:
 | rho | DOUBLE | Option rho | 0.02 | `ods.rho` | gme_ods_cboe_options_chain |
 | theo | DOUBLE | Theoretical value | 3.65 | `ods.theo` | gme_ods_cboe_options_chain |
 | dte | INTEGER | Days to expiry | 31 | `ods.expiry - ods.pull_date` | Derived from ODS expiry, pull_date |
-| spot | DOUBLE | Underlying close price | 28.50 | `ods.underlying_close` | gme_ods_cboe_options_chain |
+| spot | DOUBLE | Underlying close price | 28.50 *(fixture)* | `ods.underlying_close` | gme_ods_cboe_options_chain |
 | gex_contribution | DOUBLE | Per-contract gamma exposure ($) | 12345.67 | `COALESCE(gamma, 0) * COALESCE(open_interest, 0) * 100 * POWER(underlying_close, 2) * 0.01 * CASE WHEN option_type = 'call' THEN 1 ELSE -1 END` | Derived from ODS gamma, OI, underlying_close, option_type |
 | series_type | VARCHAR | Option series classification | MONTHLY | `CASE WHEN DTE > 365 THEN 'LEAP' WHEN DTE <= 7 THEN 'WEEKLY' ELSE 'MONTHLY' END` | Derived from DTE |
 | provider | VARCHAR | Data provider | cboe | `ods.provider` | gme_ods_cboe_options_chain |
@@ -331,7 +331,7 @@ Facts fall into two categories:
 |-------------|-----------|-----------|---------------|-------------|-------------|
 | pull_date | DATE | Pull date | 2026-05-20 | `DISTINCT pull_date` from DWD | gme_dwd_option_contract_di |
 | ticker | VARCHAR | Underlying ticker | GME | From DWD | gme_dwd_option_contract_di |
-| spot | DOUBLE | Underlying close price | 28.50 | `DISTINCT spot` from DWD | gme_dwd_option_contract_di |
+| spot | DOUBLE | Underlying close price | 28.50 *(fixture)* | `DISTINCT spot` from DWD | gme_dwd_option_contract_di |
 | max_pain_strike | DOUBLE | Strike minimizing total exercise pain | 27.00 | Cross-join DWD contracts; for each candidate strike, `SUM(CASE WHEN c2.option_type = 'call' AND c2.strike < c1.strike THEN (c1.strike - c2.strike) * c2.open_interest * 100 WHEN c2.option_type = 'put' AND c2.strike > c1.strike THEN (c2.strike - c1.strike) * c2.open_interest * 100 ELSE 0 END)`; select candidate with `MIN(total_pain)` via `QUALIFY ROW_NUMBER() OVER (ORDER BY total_pain ASC) = 1` | gme_dwd_option_contract_di |
 | max_pain_convergence_pct | DOUBLE | Spot-to-max-pain distance as % | 5.26 | `ROUND(ABS(spot - max_pain_strike) / spot * 100, 2)` | Derived from spot and max_pain_strike |
 | net_gex | DOUBLE | Total net GEX across all strikes | 150000.00 | `SUM(net_gex)` from strike_gex_1d | gme_dws_strike_gex_1d |
@@ -389,7 +389,7 @@ Facts fall into two categories:
 |-------------|-----------|-----------|---------------|-------------|-------------|
 | pull_date | DATE | Pull date (join key to all DWS + dim) | 2026-05-20 | `sn.pull_date` | gme_dws_daily_snapshot_1d |
 | ticker | VARCHAR | Underlying ticker | GME | `sn.ticker` | gme_dws_daily_snapshot_1d |
-| spot | DOUBLE | Underlying close price | 28.50 | `sn.spot` | gme_dws_daily_snapshot_1d |
+| spot | DOUBLE | Underlying close price | 28.50 *(fixture)* | `sn.spot` | gme_dws_daily_snapshot_1d |
 | year | INTEGER | Calendar year | 2026 | `d.year` | gme_dim_date |
 | quarter | INTEGER | Calendar quarter | 2 | `d.quarter` | gme_dim_date |
 | month_name | VARCHAR | Month name | May | `d.month_name` | gme_dim_date |
@@ -437,7 +437,7 @@ Facts fall into two categories:
 |-------------|-----------|-----------|---------------|-------------|-------------|
 | trade_date | DATE | Trading date | 2026-05-20 | `trade_date` | gme_underlying_closes.csv |
 | ticker | VARCHAR | Ticker symbol | GME | `ticker` | gme_underlying_closes.csv |
-| close_price | DOUBLE | Daily closing price | 28.50 | `close_price` | gme_underlying_closes.csv |
+| close_price | DOUBLE | Daily closing price | 22.55 | `close_price` | gme_underlying_closes.csv |
 
 #### gme_social_sentiment (seed)
 
@@ -468,7 +468,10 @@ produces identical row counts. The `delete+insert` strategy deletes all existing
 rows matching the incoming `unique_key` values before inserting, so duplicate
 appends are structurally impossible.
 
-**Fixture mode (`use_fixture: true`):** The ODS reads a static Parquet snapshot.
+**Fixture mode (`use_fixture: true`):** The ODS reads a static Parquet snapshot
+(see `fixtures/MANIFEST.md` for provenance, SHA-256 hash, and row count).
+Example values marked *(fixture)* in schema tables above come from this snapshot
+and are illustrative — they do not represent current market prices.
 On rerun, `delete+insert` removes the prior load and re-inserts the same rows.
 Row count is stable across runs.
 

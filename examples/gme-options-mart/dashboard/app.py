@@ -13,10 +13,22 @@ import pathlib
 
 import duckdb
 import streamlit as st
+import yaml
 
 DB_PATH = pathlib.Path(__file__).parent.parent / "target" / "gme_options.duckdb"
 ADS_TABLE = "gme_ads_market_dashboard"
 DQC_SCORECARD = pathlib.Path(__file__).parent.parent / "dqc_scorecard.json"
+DBT_PROJECT = pathlib.Path(__file__).parent.parent / "dbt_project.yml"
+
+
+def _is_fixture_mode() -> bool:
+    if DBT_PROJECT.exists():
+        try:
+            cfg = yaml.safe_load(DBT_PROJECT.read_text())
+            return bool(cfg.get("vars", {}).get("use_fixture", False))
+        except Exception:
+            pass
+    return False
 
 METRIC_CARDS = [
     {
@@ -202,6 +214,7 @@ def render_cards(cards, row):
 
 def main():
     scorecard = load_dqc()
+    fixture_mode = _is_fixture_mode()
 
     st.title("GME Options Dashboard")
     st.markdown(
@@ -209,13 +222,25 @@ def main():
         "Educational Use Only / Not Financial Advice"
     )
 
+    if fixture_mode:
+        st.warning(
+            "**FIXTURE / DEMO MODE** — All values shown are derived from a "
+            "static fixture snapshot (illustrative data, not live market prices). "
+            "Set `use_fixture: false` in `dbt_project.yml` and re-run the "
+            "pipeline for live delayed data from CBOE."
+        )
+
     df = load_latest()
     if df.empty:
         st.warning("No data — run `dbt run --profiles-dir .` first.")
         return
 
     row = df.iloc[0]
-    st.caption(f"Data as of: **{row.get('pull_date', 'N/A')}**")
+    data_date = row.get("pull_date", "N/A")
+    if fixture_mode:
+        st.caption(f"Data as of: **{data_date}** (fixture snapshot — not current)")
+    else:
+        st.caption(f"Data as of: **{data_date}**")
 
     st.subheader("Market Overview")
     render_cards(METRIC_CARDS, row)
