@@ -22,13 +22,18 @@ max_pain AS (
 
 pc_ratio AS (
     SELECT
-        pull_date,
-        ticker,
-        SUM(CASE WHEN option_type = 'put' THEN open_interest ELSE 0 END) * 1.0
-        / NULLIF(SUM(CASE WHEN option_type = 'call' THEN open_interest ELSE 0 END), 0)
-                                                                    AS pc_ratio
-    FROM {{ ref('gme_dwd_option_contract_di') }}
-    GROUP BY pull_date, ticker
+        c.pull_date,
+        c.ticker,
+        SUM(CASE WHEN c.option_type = 'put' THEN c.open_interest ELSE 0 END) * 1.0
+        / NULLIF(SUM(CASE WHEN c.option_type = 'call' THEN c.open_interest ELSE 0 END), 0)
+                                                                    AS pc_ratio,
+        mp_ref.max_pain_expiry                                      AS pc_ratio_expiry
+    FROM {{ ref('gme_dwd_option_contract_di') }} c
+    INNER JOIN max_pain mp_ref
+        ON c.pull_date = mp_ref.pull_date AND c.ticker = mp_ref.ticker
+    WHERE c.contract_class = 'standard'
+      AND c.expiry = mp_ref.max_pain_expiry
+    GROUP BY c.pull_date, c.ticker, mp_ref.max_pain_expiry
 ),
 
 top_oi AS (
@@ -36,9 +41,13 @@ top_oi AS (
         pull_date, ticker, strike, open_interest,
         ROW_NUMBER() OVER (PARTITION BY pull_date, ticker ORDER BY open_interest DESC) AS oi_rank
     FROM (
-        SELECT pull_date, ticker, strike, SUM(open_interest) AS open_interest
-        FROM {{ ref('gme_dwd_option_contract_di') }}
-        GROUP BY pull_date, ticker, strike
+        SELECT c.pull_date, c.ticker, c.strike, SUM(c.open_interest) AS open_interest
+        FROM {{ ref('gme_dwd_option_contract_di') }} c
+        INNER JOIN max_pain mp_ref
+            ON c.pull_date = mp_ref.pull_date AND c.ticker = mp_ref.ticker
+        WHERE c.contract_class = 'standard'
+          AND c.expiry = mp_ref.max_pain_expiry
+        GROUP BY c.pull_date, c.ticker, c.strike
     )
 ),
 
@@ -60,6 +69,7 @@ SELECT
     ga.top_gex_strike,
 
     pc.pc_ratio,
+    pc.pc_ratio_expiry,
 
     (SELECT strike FROM top_oi WHERE pull_date = s.pull_date
      AND ticker = s.ticker AND oi_rank = 1)                         AS top_oi_strike_1,

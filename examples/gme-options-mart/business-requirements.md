@@ -101,7 +101,7 @@ Each dashboard metric is classified by its data origin. This contract ensures th
 | Spot Price | spot | source_native | CBOE `underlying_close` | — | — | 15-min delayed | CBOE source |
 | Max Pain | max_pain_strike | derived | Cross-join pain calc on distinct strike candidates | per-expiry (nearest standard shown) | standard only | as-of pull_date | model-derived |
 | Max Pain Convergence | max_pain_convergence_pct | derived | `ABS(spot - max_pain) / spot * 100` | per-expiry | standard only | as-of pull_date | model-derived |
-| P/C Ratio | pc_ratio | derived | `SUM(put_OI) / SUM(call_OI)` across all standard contracts | all (DTE >= 7) | all | as-of pull_date | model-derived |
+| P/C Ratio | pc_ratio | derived | `SUM(put_OI) / SUM(call_OI)` for nearest standard expiry | per-expiry (nearest standard shown) | standard only | as-of pull_date | model-derived |
 | Net GEX | net_gex | derived | `SUM(gamma * OI * 100 * spot^2 * 0.01 * sign)` | all | all | as-of pull_date | model-derived |
 | IV30 | iv30 | derived | OI-weighted avg IV for 20-40 DTE window | 20-40 DTE | all | as-of pull_date | model-derived |
 | HV20 | hv20 | derived | `STDDEV(LN(close/prev)) * SQRT(252)` over 20 returns | — | — | latest seed close | model-derived |
@@ -121,8 +121,8 @@ URLs and status labels reflect browser-verified checks run 2026-05-23. These lin
 | Dashboard Card | Metric | Reference Source | Verified URL | Link Status |
 |----------------|--------|-----------------|--------------|-------------|
 | Spot Price | spot | Yahoo Finance | <https://finance.yahoo.com/quote/GME/> | comparator |
-| Max Pain | max_pain_strike | Maximum-Pain.com | <https://maximum-pain.com/options/GME> | comparator |
-| P/C Ratio | pc_ratio | Barchart Put/Call Ratio | <https://www.barchart.com/stocks/quotes/GME/put-call-ratios> | comparator |
+| Max Pain | max_pain_strike | ChartExchange (standard class) | <https://chartexchange.com/symbol/nyse-gme/optionchain/summary/?adjustment=GME> | comparator |
+| P/C Ratio | pc_ratio | ChartExchange (standard class) | <https://chartexchange.com/symbol/nyse-gme/optionchain/summary/?adjustment=GME> | comparator |
 | Net GEX | net_gex | Barchart Gamma Exposure | <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | comparator |
 | IV30 | iv30 | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | comparator |
 | Gamma Flip | gamma_flip_point | Barchart Gamma Exposure | <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | comparator |
@@ -135,11 +135,20 @@ URLs and status labels reflect browser-verified checks run 2026-05-23. These lin
 | Social Mentions | social_mention_count | — | — | unsupported |
 | Social Sentiment | social_sentiment_score | — | — | unsupported |
 
-**Rejected links (removed from dashboard fact-check references):**
+**ChartExchange notes:**
+- ChartExchange visibly supports adjustment-specific routes: `?adjustment=GME` for standard contracts, `?adjustment=GME1` for adjusted delivery class.
+- Browser-verified 2026-05-23: standard GME Jun 18, 2026 Max Pain `$22.00`, P/C `0.29`; adjusted GME1 Max Pain `$15.00`, P/C `0.18`.
+- The unqualified summary URL displays adjusted-class values — always use `?adjustment=GME` for standard comparator.
+- ChartExchange is a browser-verified comparator link only. API/data-use suitability for warehouse ingestion is not confirmed; do not pull values into MotherDuck until terms are reviewed.
+
+**Rejected / broken links (removed from dashboard fact-check references):**
 - **SqueezeMetrics DIX Monitor** (`squeezemetrics.com/monitor`): tracks S&P 500 market-wide GEX, not individual stock GEX.
 - **Yahoo Finance Community**: a discussion forum, not a structured data endpoint.
 - **SwaggyStocks Max Pain** (`swaggerstocks.com`): navigation failed.
 - **ApeWisdom** (`apewisdom.io/stocks/GME/`): aggregation scope differs; social metrics reclassified as unsupported.
+- **Maximum-Pain.com** (`maximum-pain.com/options/GME`): replaced by ChartExchange which shows adjustment-specific routes matching contract-class-scoped calculation.
+- **Market Chameleon IV** (`marketchameleon.com/Overview/GME/IV/`): `ERR_HTTP2_PROTOCOL_ERROR` in Playwright 2026-05-23; cannot be represented as browser-verified.
+- **Barchart options-overview** (`barchart.com/stocks/quotes/GME/options-overview`): CloudFront `403 ERROR` in Playwright 2026-05-23; cannot be represented as browser-verified. Note: other Barchart sub-pages (gamma-exposure, volatility-greeks, put-call-ratios, options) remain accessible.
 
 **Comparator label notes:**
 - All model-derived metrics use **comparator** status for their reference links. The mart computes these values from CBOE inputs using documented formulas; the external links are for manual cross-verification only and may use different calculation methods, lookback windows, or data sources.

@@ -464,7 +464,7 @@ def _render_pc_trend(df: pd.DataFrame):
     fig.add_hline(y=1.0, line_dash="dash", line_color="gray",
                   annotation_text="P/C = 1.0")
     fig.update_layout(
-        title="Put/Call Ratio Trend (model-derived from CBOE OI)",
+        title="Put/Call Ratio Trend — standard contracts, per-expiry (model-derived)",
         xaxis_title="Date", yaxis_title="P/C Ratio",
         height=380, margin=dict(t=40, b=40),
     )
@@ -610,9 +610,16 @@ def main():
     _render_metric_row(row, brd)
 
     max_pain_expiry = row.get("max_pain_expiry")
+    pc_ratio_expiry = row.get("pc_ratio_expiry")
     if max_pain_expiry is not None and pd.notna(max_pain_expiry):
+        expiry_note = f"Max pain and P/C ratio shown for nearest standard expiry: **{max_pain_expiry}**."
+        if pc_ratio_expiry is not None and pd.notna(pc_ratio_expiry) and str(pc_ratio_expiry) != str(max_pain_expiry):
+            expiry_note = (
+                f"Max pain for nearest standard expiry: **{max_pain_expiry}**. "
+                f"P/C ratio for standard expiry: **{pc_ratio_expiry}**."
+            )
         st.caption(
-            f"Max pain shown for nearest standard expiry: **{max_pain_expiry}**. "
+            f"{expiry_note} "
             "Per-expiry breakdown available in `gme_dws_max_pain_by_expiry_1d`."
         )
 

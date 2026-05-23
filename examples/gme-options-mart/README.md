@@ -26,8 +26,8 @@ Every metric card shows its source type and links to a public comparator site fo
 | Metric | Source Type | Comparator Link |
 |--------|-------------|-----------------|
 | Spot Price | source_native | [Yahoo Finance](https://finance.yahoo.com/quote/GME/) |
-| Max Pain | model-derived | [Maximum-Pain.com](https://maximum-pain.com/options/GME) |
-| P/C Ratio | model-derived | [Barchart](https://www.barchart.com/stocks/quotes/GME/put-call-ratios) |
+| Max Pain | model-derived | [ChartExchange](https://chartexchange.com/symbol/nyse-gme/optionchain/summary/?adjustment=GME) |
+| P/C Ratio | model-derived | [ChartExchange](https://chartexchange.com/symbol/nyse-gme/optionchain/summary/?adjustment=GME) |
 | Net GEX | model-derived | [Barchart GEX](https://www.barchart.com/stocks/quotes/GME/gamma-exposure) |
 | IV30 | model-derived | [Barchart Vol](https://www.barchart.com/stocks/quotes/GME/volatility-greeks) |
 | Gamma Flip | model-derived | [Barchart GEX](https://www.barchart.com/stocks/quotes/GME/gamma-exposure) |

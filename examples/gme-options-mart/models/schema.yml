@@ -158,7 +158,7 @@ models:
           - not_null
 
   - name: gme_dws_daily_snapshot_1d
-    description: "Daily market summary: spot, GEX, max pain (nearest standard expiry), P/C ratio, top OI strikes. Grain: one row per day."
+    description: "Daily market summary: spot, GEX, max pain (nearest standard expiry), P/C ratio (standard class, same expiry), top OI strikes. Grain: one row per day."
     columns:
       - name: pull_date
         data_tests:
@@ -168,8 +168,11 @@ models:
         data_tests:
           - not_null
       - name: pc_ratio
+        description: "Put/Call OI ratio for standard contracts on the nearest standard expiry."
         data_tests:
           - not_null
+      - name: pc_ratio_expiry
+        description: "Expiry date used for the P/C ratio calculation (same as max_pain_expiry)."
 
   - name: gme_dws_options_metrics_1d
     description: >
@@ -363,6 +366,8 @@ models:
           - not_null
       - name: max_pain_expiry
         description: "Expiry date for the headline max pain value (nearest standard-class expiry)."
+      - name: pc_ratio_expiry
+        description: "Expiry date used for the headline P/C ratio (same nearest standard expiry as max pain)."
       - name: gamma_flip_point
         description: "Strike where cumulative net GEX crosses zero."
         data_tests:
