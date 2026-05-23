@@ -21,20 +21,20 @@ pip install -r dashboard/requirements.txt
 streamlit run dashboard/app.py
 ```
 
-Every metric card links to a free public reference site for independent verification:
+Every metric card shows its source type and links to a public comparator site for manual cross-verification. All derived metrics are computed by dbt models from CBOE inputs — external links are comparators, not data sources.
 
-| Metric | Fact-Check Source |
-|--------|-------------------|
-| Spot Price | [Yahoo Finance](https://finance.yahoo.com/quote/GME) |
-| Max Pain | [SwaggyStocks](https://swaggystocks.com/dashboard/options-max-pain/GME) |
-| P/C Ratio | [Barchart](https://www.barchart.com/stocks/quotes/GME/options-overview) |
-| Net GEX | [SqueezeMetrics](https://squeezemetrics.com/monitor/dix) |
-| IV30 | [MarketChameleon](https://marketchameleon.com/Overview/GME/IV/) |
-| Gamma Flip | [SqueezeMetrics](https://squeezemetrics.com/monitor/dix) |
-| HV20 | [MarketChameleon](https://marketchameleon.com/Overview/GME/IV/) |
-| IV Rank / Percentile | [MarketChameleon](https://marketchameleon.com/Overview/GME/IV/) |
-| Dealer Net Gamma | [SqueezeMetrics](https://squeezemetrics.com/monitor/dix) |
-| OI Daily Delta | [Barchart](https://www.barchart.com/stocks/quotes/GME/options-overview) |
+| Metric | Source Type | Comparator Link |
+|--------|-------------|-----------------|
+| Spot Price | source_native | [Yahoo Finance](https://finance.yahoo.com/quote/GME/) |
+| Max Pain | model-derived | [Maximum-Pain.com](https://maximum-pain.com/options/GME) |
+| P/C Ratio | model-derived | [Barchart](https://www.barchart.com/stocks/quotes/GME/put-call-ratios) |
+| Net GEX | model-derived | [Barchart GEX](https://www.barchart.com/stocks/quotes/GME/gamma-exposure) |
+| IV30 | model-derived | [Barchart Vol](https://www.barchart.com/stocks/quotes/GME/volatility-greeks) |
+| Gamma Flip | model-derived | [Barchart GEX](https://www.barchart.com/stocks/quotes/GME/gamma-exposure) |
+| HV20 | model-derived | [Barchart Vol](https://www.barchart.com/stocks/quotes/GME/volatility-greeks) |
+| IV Rank / Percentile | model-derived | [Barchart Vol](https://www.barchart.com/stocks/quotes/GME/volatility-greeks) |
+| Dealer Net Gamma | model-derived | [Barchart GEX](https://www.barchart.com/stocks/quotes/GME/gamma-exposure) |
+| OI Daily Delta | model-derived | [Barchart Options](https://www.barchart.com/stocks/quotes/GME/options) |
 
 ## Architecture
 
@@ -47,7 +47,7 @@ Every metric card links to a free public reference site for independent verifica
 | ODS | `gme_ods_cboe_options_chain` | Fixture-backed by default (Parquet); live CBOE via httpfs when `use_fixture: false` |
 | DIM | `gme_dim_date` | Conformed date dimension with trading day flag (seeded 2024-2027) |
 | DWD | `gme_dwd_option_contract_di` | Cleaned option contracts with GEX computed, series classified |
-| DWS | `gme_dws_strike_gex_1d`, `gme_dws_daily_snapshot_1d`, `gme_dws_options_metrics_1d` | Strike-level GEX + daily summary + Phase-1 options metrics |
+| DWS | `gme_dws_strike_gex_1d`, `gme_dws_max_pain_by_expiry_1d`, `gme_dws_daily_snapshot_1d`, `gme_dws_options_metrics_1d` | Strike-level GEX + per-expiry max pain + daily summary + Phase-1 options metrics |
 | ADS | `gme_ads_market_dashboard` | One-big-table combining market snapshot, Phase-1 metrics, and calendar attributes |
 
 ### Data Source
@@ -80,7 +80,7 @@ gme_ads_market_dashboard         X
 | Metric | Formula | Layer |
 |--------|---------|-------|
 | GEX contribution | `gamma * OI * 100 * spot^2 * 0.01 * sign(call=+1, put=-1)` | DWD |
-| Max pain | Strike minimizing total exercise value across all contracts | DWS |
+| Max pain | Strike minimizing total exercise value; per-expiry, standard-class only, distinct candidates | DWS |
 | P/C ratio | Put OI / Call OI | DWS |
 | Gamma flip point | Strike where cumulative net GEX crosses zero (interpolated); fallback: nearest-to-zero strike | DWS |
 | IV30 | OI-weighted average IV for near-30-DTE contracts (20-40 DTE window) | DWS |

@@ -51,6 +51,12 @@ SELECT
         ELSE 'MONTHLY'
     END                                                AS series_type,
 
+    CASE
+        WHEN LENGTH(ods.option_symbol) <= LENGTH(ods.ticker) + 15
+        THEN 'standard'
+        ELSE 'adjusted'
+    END                                                AS contract_class,
+
     ods.provider,
     ods.pull_ts_utc,
     ods.cboe_timestamp

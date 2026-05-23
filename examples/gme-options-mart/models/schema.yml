@@ -99,6 +99,13 @@ models:
           - accepted_values:
               arguments:
                 values: ["WEEKLY", "MONTHLY", "LEAP"]
+      - name: contract_class
+        description: "standard = standard OCC symbol (root matches ticker); adjusted = non-standard root (e.g. GME1 for dividend warrants)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["standard", "adjusted"]
 
   # --- DWS Layer ---
   - name: gme_dws_strike_gex_1d
@@ -117,8 +124,41 @@ models:
         data_tests:
           - not_null
 
+  - name: gme_dws_max_pain_by_expiry_1d
+    description: >
+      Per-expiry, per-contract-class max pain calculation using distinct strike candidates.
+      Grain: one row per (pull_date, ticker, expiry, contract_class).
+      Fixes the prior all-expiry/mixed-class calculation that over-counted strikes with
+      multiple contracts.
+    columns:
+      - name: pull_date
+        data_tests:
+          - not_null
+      - name: ticker
+        data_tests:
+          - not_null
+      - name: expiry
+        description: "Option expiration date for this max pain calculation."
+        data_tests:
+          - not_null
+      - name: contract_class
+        description: "standard or adjusted — max pain calculated separately per class."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["standard", "adjusted"]
+      - name: max_pain_strike
+        description: "Strike minimizing total exercise value for this expiry and contract class."
+        data_tests:
+          - not_null
+      - name: min_total_pain
+        description: "Total pain at the max pain strike."
+        data_tests:
+          - not_null
+
   - name: gme_dws_daily_snapshot_1d
-    description: "Daily market summary: spot, GEX, max pain, P/C ratio, top OI strikes. Grain: one row per day."
+    description: "Daily market summary: spot, GEX, max pain (nearest standard expiry), P/C ratio, top OI strikes. Grain: one row per day."
     columns:
       - name: pull_date
         data_tests:
@@ -305,6 +345,7 @@ models:
     description: >
       One-big-table combining daily snapshot and Phase-1 options metrics
       with calendar attributes for dashboard consumption. Grain: one row per day.
+      Max pain is for the nearest standard-class expiry only.
     columns:
       - name: pull_date
         data_tests:
@@ -320,6 +361,8 @@ models:
       - name: ticker
         data_tests:
           - not_null
+      - name: max_pain_expiry
+        description: "Expiry date for the headline max pain value (nearest standard-class expiry)."
       - name: gamma_flip_point
         description: "Strike where cumulative net GEX crosses zero."
         data_tests:

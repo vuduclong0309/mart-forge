@@ -11,26 +11,13 @@ WITH gex_agg AS (
 ),
 
 max_pain AS (
-    WITH pain_calc AS (
-        SELECT
-            c1.pull_date,
-            c1.ticker,
-            c1.strike AS candidate,
-            SUM(CASE
-                WHEN c2.option_type = 'call' AND c2.strike < c1.strike
-                THEN (c1.strike - c2.strike) * c2.open_interest * 100
-                WHEN c2.option_type = 'put' AND c2.strike > c1.strike
-                THEN (c2.strike - c1.strike) * c2.open_interest * 100
-                ELSE 0
-            END) AS total_pain
-        FROM {{ ref('gme_dwd_option_contract_di') }} c1
-        CROSS JOIN {{ ref('gme_dwd_option_contract_di') }} c2
-        WHERE c1.pull_date = c2.pull_date AND c1.ticker = c2.ticker
-        GROUP BY c1.pull_date, c1.ticker, c1.strike
-    )
-    SELECT pull_date, ticker, candidate AS max_pain_strike
-    FROM pain_calc
-    QUALIFY ROW_NUMBER() OVER (PARTITION BY pull_date, ticker ORDER BY total_pain ASC) = 1
+    SELECT pull_date, ticker, max_pain_strike, expiry AS max_pain_expiry
+    FROM {{ ref('gme_dws_max_pain_by_expiry_1d') }}
+    WHERE contract_class = 'standard'
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY pull_date, ticker
+        ORDER BY expiry ASC
+    ) = 1
 ),
 
 pc_ratio AS (
@@ -66,6 +53,7 @@ SELECT
     s.spot,
 
     mp.max_pain_strike,
+    mp.max_pain_expiry,
     ROUND(ABS(s.spot - mp.max_pain_strike) / s.spot * 100, 2)      AS max_pain_convergence_pct,
 
     ga.net_gex,

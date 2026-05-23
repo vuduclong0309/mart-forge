@@ -28,6 +28,35 @@ DBT_PROJECT = BASE / "dbt_project.yml"
 st.set_page_config(page_title="GME Options Dashboard", layout="wide")
 
 
+# ── metric source classification ──────────────────────────────────
+
+_METRIC_SOURCE = {
+    "spot": "source_native",
+    "max_pain_strike": "derived",
+    "pc_ratio": "derived",
+    "net_gex": "derived",
+    "iv30": "derived",
+    "hv20": "derived",
+    "gamma_flip_point": "derived",
+    "iv_rank": "derived",
+    "iv_percentile": "derived",
+    "oi_daily_delta": "derived",
+    "dealer_net_gamma": "derived",
+    "top_oi_strike_1": "derived",
+    "top_oi_strike_2": "derived",
+    "top_oi_strike_3": "derived",
+    "social_mention_count": "unsupported",
+    "social_sentiment_score": "unsupported",
+}
+
+_SOURCE_LABEL = {
+    "source_native": "CBOE source",
+    "derived": "model-derived",
+    "comparator_only": "comparator",
+    "unsupported": "fixture only",
+}
+
+
 # ── helpers ────────────────────────────────────────────────────────
 
 def _resolve_db_path() -> str:
@@ -82,21 +111,35 @@ def _load_brd() -> dict:
 _STATUS_ST_COLOR = {
     "exact": "green",
     "proxy": "orange",
+    "comparator": "blue",
     "unsupported": "gray",
     "unverified": "red",
 }
 
 
 def _fact_caption(metric: str, brd: dict) -> str:
+    parts = []
+    source_type = _METRIC_SOURCE.get(metric)
+    if source_type:
+        label = _SOURCE_LABEL.get(source_type, source_type)
+        if source_type == "derived":
+            parts.append(f":blue[{label}]")
+        elif source_type == "source_native":
+            parts.append(f":green[{label}]")
+        elif source_type == "unsupported":
+            parts.append(f":gray[{label}]")
+
     info = brd.get(metric)
-    if not info:
-        return ""
-    s = info["status"]
-    color = _STATUS_ST_COLOR.get(s, "gray")
-    url = info.get("url")
-    if url:
-        return f":{color}[{s}] [source ↗]({url})"
-    return f":{color}[{s}]"
+    if info:
+        s = info["status"]
+        color = _STATUS_ST_COLOR.get(s, "gray")
+        url = info.get("url")
+        if url:
+            parts.append(f":{color}[{s}] [ref ↗]({url})")
+        else:
+            parts.append(f":{color}[{s}]")
+
+    return " · ".join(parts)
 
 
 # ── database ───────────────────────────────────────────────────────
@@ -188,18 +231,24 @@ def load_oi_by_strike() -> pd.DataFrame:
         SELECT strike, option_type, SUM(open_interest) AS oi
         FROM gme_dwd_option_contract_di
         WHERE pull_date = (SELECT MAX(pull_date) FROM gme_dwd_option_contract_di)
+          AND contract_class = 'standard'
         GROUP BY strike, option_type
         ORDER BY strike
     """).fetchdf()
 
 
 @st.cache_data(ttl=300)
-def load_max_pain_curve() -> pd.DataFrame:
-    return _get_db().sql("""
+def load_max_pain_curve(expiry_filter=None) -> pd.DataFrame:
+    expiry_clause = ""
+    if expiry_filter is not None:
+        expiry_clause = f"AND expiry = '{expiry_filter}'"
+    return _get_db().sql(f"""
         WITH contracts AS (
             SELECT strike, option_type, open_interest
             FROM gme_dwd_option_contract_di
             WHERE pull_date = (SELECT MAX(pull_date) FROM gme_dwd_option_contract_di)
+              AND contract_class = 'standard'
+              {expiry_clause}
         ),
         candidates AS (
             SELECT DISTINCT strike AS candidate FROM contracts
@@ -293,7 +342,7 @@ def _render_gex_chart(df: pd.DataFrame, spot: float, gamma_flip):
                       annotation_text=f"Gamma Flip ${float(gamma_flip):,.2f}",
                       annotation_position="bottom right")
     fig.update_layout(
-        title="Strike GEX Profile (DWS: gme_dws_strike_gex_1d)",
+        title="Strike GEX Profile (model-derived from CBOE Greeks)",
         xaxis_title="Strike", yaxis_title="Net GEX",
         height=420, showlegend=False, margin=dict(t=40, b=40),
     )
@@ -323,17 +372,21 @@ def _render_oi_chart(df: pd.DataFrame, spot: float):
     fig.add_vline(x=spot, line_dash="dash", line_color="#007bff",
                   annotation_text=f"Spot ${spot:,.2f}")
     fig.update_layout(
-        title="Open Interest by Strike (DWD: gme_dwd_option_contract_di)",
+        title="Open Interest by Strike — standard contracts (CBOE source)",
         xaxis_title="Strike", yaxis_title="Open Interest",
         barmode="group", height=420, margin=dict(t=40, b=40),
     )
     st.plotly_chart(fig, use_container_width=True)
 
 
-def _render_max_pain(df: pd.DataFrame, spot: float, max_pain):
+def _render_max_pain(df: pd.DataFrame, spot: float, max_pain, max_pain_expiry):
     if df.empty:
         st.info("No max-pain data available.")
         return
+
+    expiry_label = ""
+    if max_pain_expiry is not None and pd.notna(max_pain_expiry):
+        expiry_label = f" — expiry {max_pain_expiry}"
 
     col_chart, col_table = st.columns([3, 1])
 
@@ -357,7 +410,7 @@ def _render_max_pain(df: pd.DataFrame, spot: float, max_pain):
                 font=dict(color="#fd7e14", size=12),
             )
         fig.update_layout(
-            title="Max Pain Curve (DWS: gme_dws_daily_snapshot_1d)",
+            title=f"Max Pain Curve — standard contracts{expiry_label} (model-derived)",
             xaxis_title="Strike", yaxis_title="Total Pain ($)",
             height=400, showlegend=False, margin=dict(t=40, b=40),
         )
@@ -389,7 +442,7 @@ def _render_iv_hv_trend(df: pd.DataFrame):
         line=dict(color="#fd7e14"),
     ))
     fig.update_layout(
-        title="IV30 vs HV20 Trend (ADS: gme_ads_market_dashboard)",
+        title="IV30 vs HV20 Trend (model-derived)",
         xaxis_title="Date", yaxis_title="Volatility",
         yaxis_tickformat=".0%", height=380,
         margin=dict(t=40, b=40),
@@ -411,7 +464,7 @@ def _render_pc_trend(df: pd.DataFrame):
     fig.add_hline(y=1.0, line_dash="dash", line_color="gray",
                   annotation_text="P/C = 1.0")
     fig.update_layout(
-        title="Put/Call Ratio Trend (ADS: gme_ads_market_dashboard)",
+        title="Put/Call Ratio Trend (model-derived from CBOE OI)",
         xaxis_title="Date", yaxis_title="P/C Ratio",
         height=380, margin=dict(t=40, b=40),
     )
@@ -436,14 +489,27 @@ def _render_dqc_panel(scorecard: dict | None, brd: dict):
             st.warning("DQC scorecard not available.")
 
         st.markdown("---")
+        st.markdown("#### Metric Source Classification")
+        st.markdown(
+            "| Type | Meaning |\n"
+            "|---|---|\n"
+            "| :green[source_native] | Value read directly from CBOE delayed quotes |\n"
+            "| :blue[model-derived] | Computed by dbt models from CBOE inputs |\n"
+            "| :orange[comparator] | External link for manual comparison only |\n"
+            "| :gray[unsupported] | No live source; fixture data for CI |"
+        )
+
+        st.markdown("---")
         st.markdown("#### Fact-Check Reference Sources (BRD §2.7)")
         if brd:
             rows = []
             for metric, info in sorted(brd.items()):
                 url = info.get("url") or "—"
+                source_type = _METRIC_SOURCE.get(metric, "—")
                 rows.append({
                     "Metric": metric,
-                    "Status": info["status"],
+                    "Source Type": source_type,
+                    "Link Status": info["status"],
                     "Reference URL": url,
                     "Finding": (info.get("finding") or "")[:100],
                 })
@@ -460,14 +526,15 @@ def _render_dqc_panel(scorecard: dict | None, brd: dict):
         st.markdown("---")
         st.markdown("#### Data Lineage")
         st.markdown(
-            "| Visualization | Source Model | Layer |\n"
-            "|---|---|---|\n"
-            "| Market Summary | `gme_ads_market_dashboard` | ADS |\n"
-            "| Strike GEX Profile | `gme_dws_strike_gex_1d` | DWS |\n"
-            "| OI by Strike | `gme_dwd_option_contract_di` | DWD |\n"
-            "| Max Pain Curve | `gme_dwd_option_contract_di` | DWD |\n"
-            "| IV/HV Trend | `gme_ads_market_dashboard` | ADS |\n"
-            "| P/C Ratio Trend | `gme_ads_market_dashboard` | ADS |"
+            "| Visualization | Source Model | Layer | Metric Type |\n"
+            "|---|---|---|---|\n"
+            "| Market Summary (Spot) | `gme_ads_market_dashboard` | ADS | source_native |\n"
+            "| Market Summary (others) | `gme_ads_market_dashboard` | ADS | model-derived |\n"
+            "| Strike GEX Profile | `gme_dws_strike_gex_1d` | DWS | model-derived |\n"
+            "| OI by Strike | `gme_dwd_option_contract_di` | DWD | source_native |\n"
+            "| Max Pain Curve | `gme_dws_max_pain_by_expiry_1d` | DWS | model-derived |\n"
+            "| IV/HV Trend | `gme_ads_market_dashboard` | ADS | model-derived |\n"
+            "| P/C Ratio Trend | `gme_ads_market_dashboard` | ADS | model-derived |"
         )
 
 
@@ -542,6 +609,13 @@ def main():
     st.subheader("Market Summary")
     _render_metric_row(row, brd)
 
+    max_pain_expiry = row.get("max_pain_expiry")
+    if max_pain_expiry is not None and pd.notna(max_pain_expiry):
+        st.caption(
+            f"Max pain shown for nearest standard expiry: **{max_pain_expiry}**. "
+            "Per-expiry breakdown available in `gme_dws_max_pain_by_expiry_1d`."
+        )
+
     # ── Strike-level Charts ────────────────────────────────────
     st.divider()
     spot = float(row.get("spot", 0))
@@ -557,7 +631,10 @@ def main():
     # ── Max Pain ───────────────────────────────────────────────
     st.divider()
     st.subheader("Max Pain Analysis")
-    _render_max_pain(load_max_pain_curve(), spot, max_pain)
+    expiry_for_curve = None
+    if max_pain_expiry is not None and pd.notna(max_pain_expiry):
+        expiry_for_curve = str(max_pain_expiry)
+    _render_max_pain(load_max_pain_curve(expiry_for_curve), spot, max_pain, max_pain_expiry)
 
     # ── Trend Charts ───────────────────────────────────────────
     st.divider()

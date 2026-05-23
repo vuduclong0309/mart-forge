@@ -85,43 +85,67 @@ This mart serves as the canonical advanced example for the mart-forge framework,
 
 > **Note:** `social_mention_count` and `social_sentiment_score` use seed fixture data for CI. No free live API provides a mention-weighted score matching this mart's exact definition. `social_sentiment_score` is marked **unsupported** for live fact-check comparison; see Section 2.7.
 
-### 2.7 Dashboard Outputs
+### 2.7 Metric-Source Contract
 
-URLs and status labels reflect browser-verified checks run 2026-05-23. Status values: **exact** = asset and metric confirmed; **proxy** = asset confirmed, metric definition may differ; **unsupported** = no viable free live source; **unverified** = page blocked (bot protection or HTTP error).
+Each dashboard metric is classified by its data origin. This contract ensures the dashboard never misrepresents a model-derived value as a provider-reported number.
 
-| Dashboard Card | Metric | Reference Source | Verified URL | Status |
-|----------------|--------|-----------------|--------------|--------|
-| Spot Price | spot | Yahoo Finance | <https://finance.yahoo.com/quote/GME/> | exact |
-| Max Pain | max_pain_strike | Maximum-Pain.com | <https://maximum-pain.com/options/GME> | exact |
-| Max Pain Convergence | max_pain_convergence_pct | Maximum-Pain.com | <https://maximum-pain.com/options/GME> | proxy |
-| P/C Ratio | pc_ratio | Barchart Put/Call Ratio | <https://www.barchart.com/stocks/quotes/GME/put-call-ratios> | exact |
-| Net GEX | net_gex | Barchart Gamma Exposure | <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | exact |
-| IV30 | iv30 | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | exact |
-| Gamma Flip | gamma_flip_point | Barchart Gamma Exposure | <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | proxy |
-| HV20 | hv20 | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | exact |
-| IV Rank | iv_rank | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | exact |
-| IV Percentile | iv_percentile | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | proxy |
-| OI Daily Delta | oi_daily_delta | Barchart Options Prices | <https://www.barchart.com/stocks/quotes/GME/options> | proxy |
-| Dealer Net Gamma | dealer_net_gamma | Barchart Gamma Exposure | <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | proxy |
-| Social Mentions | social_mention_count | ApeWisdom (Reddit tracker) | <https://apewisdom.io/stocks/GME/> | proxy |
+| Classification | Definition |
+|---------------|-----------|
+| **source_native** | Value read directly from the upstream provider (CBOE) and displayed as-is. |
+| **derived** | Computed by dbt models from source-native inputs. Formula is documented in TDD/BRD. |
+| **comparator_only** | External reference link for manual comparison. The mart does not ingest from this source; it is a link only. |
+| **unsupported** | No viable free live source exists. Value uses seed fixture for CI only. |
+
+| Dashboard Card | Metric | Source Type | Provider / Formula | Expiry Grain | Contract Class | Freshness | Dashboard Label |
+|----------------|--------|-------------|-------------------|-------------|---------------|-----------|----------------|
+| Spot Price | spot | source_native | CBOE `underlying_close` | — | — | 15-min delayed | CBOE source |
+| Max Pain | max_pain_strike | derived | Cross-join pain calc on distinct strike candidates | per-expiry (nearest standard shown) | standard only | as-of pull_date | model-derived |
+| Max Pain Convergence | max_pain_convergence_pct | derived | `ABS(spot - max_pain) / spot * 100` | per-expiry | standard only | as-of pull_date | model-derived |
+| P/C Ratio | pc_ratio | derived | `SUM(put_OI) / SUM(call_OI)` across all standard contracts | all (DTE >= 7) | all | as-of pull_date | model-derived |
+| Net GEX | net_gex | derived | `SUM(gamma * OI * 100 * spot^2 * 0.01 * sign)` | all | all | as-of pull_date | model-derived |
+| IV30 | iv30 | derived | OI-weighted avg IV for 20-40 DTE window | 20-40 DTE | all | as-of pull_date | model-derived |
+| HV20 | hv20 | derived | `STDDEV(LN(close/prev)) * SQRT(252)` over 20 returns | — | — | latest seed close | model-derived |
+| Gamma Flip | gamma_flip_point | derived | Zero-crossing of cumulative net GEX curve | all | all | as-of pull_date | model-derived |
+| IV Rank | iv_rank | derived | `(iv30 - min_252d) / (max_252d - min_252d)` | — | — | 252-session window | model-derived |
+| IV Percentile | iv_percentile | derived | Fraction of 252-session window below current iv30 | — | — | 252-session window | model-derived |
+| OI Daily Delta | oi_daily_delta | derived | `total_oi(today) - LAG(total_oi)` | all | all | as-of pull_date | model-derived |
+| Dealer Net Gamma | dealer_net_gamma | derived | `SUM(gex_contribution)` across all contracts | all | all | as-of pull_date | model-derived |
+| Top OI Strikes | top_oi_strike_1/2/3 | derived | `ROW_NUMBER() ORDER BY SUM(OI) DESC` | all | all | as-of pull_date | model-derived |
+| Social Mentions | social_mention_count | unsupported | Seed fixture only | — | — | static | fixture only |
+| Social Sentiment | social_sentiment_score | unsupported | Seed fixture only | — | — | static | fixture only |
+
+### 2.8 Dashboard Fact-Check Links
+
+URLs and status labels reflect browser-verified checks run 2026-05-23. These links are **comparator references** for manual verification — the mart does not ingest values from these sites. Status values: **comparator** = external site shows a comparable metric for GME (our value is model-derived, not sourced from this link); **proxy** = asset confirmed, metric definition may differ; **unsupported** = no viable free live source; **unverified** = page blocked (bot protection or HTTP error).
+
+| Dashboard Card | Metric | Reference Source | Verified URL | Link Status |
+|----------------|--------|-----------------|--------------|-------------|
+| Spot Price | spot | Yahoo Finance | <https://finance.yahoo.com/quote/GME/> | comparator |
+| Max Pain | max_pain_strike | Maximum-Pain.com | <https://maximum-pain.com/options/GME> | comparator |
+| P/C Ratio | pc_ratio | Barchart Put/Call Ratio | <https://www.barchart.com/stocks/quotes/GME/put-call-ratios> | comparator |
+| Net GEX | net_gex | Barchart Gamma Exposure | <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | comparator |
+| IV30 | iv30 | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | comparator |
+| Gamma Flip | gamma_flip_point | Barchart Gamma Exposure | <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | comparator |
+| HV20 | hv20 | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | comparator |
+| IV Rank | iv_rank | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | comparator |
+| IV Percentile | iv_percentile | Barchart Volatility & Greeks | <https://www.barchart.com/stocks/quotes/GME/volatility-greeks> | comparator |
+| OI Daily Delta | oi_daily_delta | Barchart Options Prices | <https://www.barchart.com/stocks/quotes/GME/options> | comparator |
+| Dealer Net Gamma | dealer_net_gamma | Barchart Gamma Exposure | <https://www.barchart.com/stocks/quotes/GME/gamma-exposure> | comparator |
+| Top OI Strikes | top_oi_strike_1/2/3 | Barchart Options Prices | <https://www.barchart.com/stocks/quotes/GME/options> | comparator |
+| Social Mentions | social_mention_count | — | — | unsupported |
 | Social Sentiment | social_sentiment_score | — | — | unsupported |
-| Top OI Strikes | top_oi_strike_1/2/3 | Barchart Options Prices | <https://www.barchart.com/stocks/quotes/GME/options> | exact |
-| ER Cycle Phase | er_cycle_phase | GameStop Investor Relations | <https://investor.gamestop.com/events-presentations> | unverified |
-| Days to Next ER | days_to_next_er | GameStop Investor Relations | <https://investor.gamestop.com/events-presentations> | unverified |
-| Warrant Series | warrant_series | Barchart Options Chain | <https://www.barchart.com/stocks/quotes/GME/options> | proxy |
 
-**Rejected links:**
-- **SqueezeMetrics DIX Monitor** (`squeezemetrics.com/monitor`): tracks S&P 500 market-wide GEX, not individual stock GEX. All three prior SqueezeMetrics references (net_gex, gamma_flip_point, dealer_net_gamma) replaced with Barchart Gamma Exposure.
-- **Yahoo Finance Community**: a discussion forum, not a structured data endpoint. Removed as validator for both social metrics.
-- **SwaggyStocks Max Pain** (`swaggerstocks.com`): navigation to the options page failed (execution context error on redirect). Replaced with Maximum-Pain.com which verified successfully.
+**Rejected links (removed from dashboard fact-check references):**
+- **SqueezeMetrics DIX Monitor** (`squeezemetrics.com/monitor`): tracks S&P 500 market-wide GEX, not individual stock GEX.
+- **Yahoo Finance Community**: a discussion forum, not a structured data endpoint.
+- **SwaggyStocks Max Pain** (`swaggerstocks.com`): navigation failed.
+- **ApeWisdom** (`apewisdom.io/stocks/GME/`): aggregation scope differs; social metrics reclassified as unsupported.
 
-**Status label notes:**
-- `gamma_flip_point` and `dealer_net_gamma` are marked **proxy** because Barchart shows GEX by strike (from which the zero-crossing and net total are derivable) but may not display these derived scalars as single labeled values.
-- `iv_percentile` is **proxy** because Barchart's lookback window may differ from this mart's 252-session definition.
-- `social_sentiment_score` is **unsupported**: no free live source provides a mention-weighted average sentiment score matching this mart's −1 to +1 definition. The mart's value uses a seed fixture and is not valid for live operator comparison.
-- `er_cycle_phase` and `days_to_next_er` are **unverified** because the GameStop Investor Relations page was inaccessible to headless browser verification; the source is the official public ER calendar.
+**Comparator label notes:**
+- All model-derived metrics use **comparator** status for their reference links. The mart computes these values from CBOE inputs using documented formulas; the external links are for manual cross-verification only and may use different calculation methods, lookback windows, or data sources.
+- `social_mention_count` and `social_sentiment_score` are **unsupported**: no free live source matches this mart's definition. Values use seed fixtures for CI only.
 
-### 2.8 DQC Outputs
+### 2.9 DQC Outputs
 
 | Control Class | What It Validates |
 |---------------|-------------------|
@@ -134,7 +158,7 @@ URLs and status labels reflect browser-verified checks run 2026-05-23. Status va
 | Null-Rate | Greeks null rate < 5% in DWD |
 | Business Reconciliation | GEX vs external source (waived — no free gamma provider) |
 
-### 2.9 ER Calendar and Instrument Metadata Metrics
+### 2.10 ER Calendar and Instrument Metadata Metrics
 
 These metrics extend the mart with publicly derivable analytics from the earnings calendar and options chain instrument metadata. They do not expose operator-specific data.
 

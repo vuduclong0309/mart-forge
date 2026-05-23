@@ -1,5 +1,5 @@
 WITH snapshot AS (
-    SELECT pull_date, ticker, spot, max_pain_strike, max_pain_convergence_pct,
+    SELECT pull_date, ticker, spot, max_pain_strike, max_pain_expiry, max_pain_convergence_pct,
            net_gex, top_gex_strike, pc_ratio, top_oi_strike_1, top_oi_strike_2, top_oi_strike_3
     FROM {{ ref('gme_dws_daily_snapshot_1d') }}
 ),
@@ -48,6 +48,7 @@ SELECT
     d.is_trading_day,
 
     sn.max_pain_strike,
+    sn.max_pain_expiry,
     sn.max_pain_convergence_pct,
     sn.net_gex,
     sn.top_gex_strike,
