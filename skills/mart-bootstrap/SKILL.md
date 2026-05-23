@@ -31,10 +31,11 @@ Reads a `mart.yml` configuration file and generates a complete Kimball-layered d
 
 This skill generates dbt models only after both design documents are approved. The full lifecycle:
 
-1. `mart-forge init` → creates `mart.yml` + `business-requirements.md` template
-2. `/mart-brd` → operator fills the BRD; both sign-off lines must reach `approved` or `approved-with-conditions` (Phase A gate)
-3. `mart-forge tdd` (or `/mart-tdd`) → generates `tech-design-doc.md` (+ `sign-off-prd.md` as a summary); both TDD sign-off lines must reach `approved` or `approved-with-conditions` (Phase B gate)
-4. `/mart-bootstrap` (this skill) → scaffolds the dbt project only after **both** gates pass
+1. `/source-discovery` (optional) → enumerate and vet candidate sources from WIKI-like input (Phase A0)
+2. `mart-forge init` → creates `mart.yml` + `business-requirements.md` template
+3. `/mart-brd` → operator fills the BRD; both sign-off lines must reach `approved` or `approved-with-conditions` (Phase A gate)
+4. `mart-forge tdd` (or `/mart-tdd`) → generates `tech-design-doc.md` (+ `sign-off-prd.md` as a summary); both TDD sign-off lines must reach `approved` or `approved-with-conditions` (Phase B gate)
+5. `/mart-bootstrap` (this skill) → scaffolds the dbt project only after **both** gates pass; runs `dbt compile` to verify before declaring success
 
 If either gate fails, STOP and inform the user which document is missing or unsigned. Route to `/mart-brd` if the BRD is missing/unapproved, or `/mart-tdd` if the TDD is missing/unapproved.
 
@@ -131,6 +132,23 @@ If either gate fails, STOP and inform the user which document is missing or unsi
 
 13. **Generate dbt_project.yml** -> verify: correct name, profile, model paths, vars
 
+14. **Run `dbt compile` to verify scaffold** -> this step is mandatory before declaring success
+
+    ```bash
+    cd {mart_name} && dbt compile --profiles-dir .
+    ```
+
+    - If `dbt compile` exits 0: scaffold is syntactically valid. Proceed to the output checklist.
+    - If `dbt compile` fails: read the error output, fix the offending model(s), and rerun until
+      compile passes. Common causes:
+      - Unresolved `{{ ref() }}` — missing model name or typo
+      - Jinja syntax error — unclosed block or bad variable name
+      - Missing `dbt_project.yml` key — model path not registered
+      - Placeholder `TODO` column used in a join — replace with a real column or drop the join
+
+    **Do NOT report the scaffold as complete until `dbt compile` exits 0.** A scaffold that does
+    not compile is not a working scaffold.
+
 ## Output Checklist
 
 - [ ] All directories created (`models/{ods,dim,dwd,dws,ads}`, `seeds/`, `tests/`)
@@ -147,6 +165,7 @@ If either gate fails, STOP and inform the user which document is missing or unsi
 - [ ] GitHub Actions workflow with correct cron
 - [ ] No hardcoded paths -- all relative from repo root
 - [ ] No `SELECT *` in any model
+- [ ] `dbt compile --profiles-dir .` exits 0 with no errors
 
 ## Resources
 
