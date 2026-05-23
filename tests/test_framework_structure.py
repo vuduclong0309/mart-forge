@@ -66,6 +66,9 @@ class TestTemplates:
     def test_dim_date_seed(self):
         assert (ROOT / "templates" / "seeds" / "dim_date.csv").exists()
 
+    def test_raw_sample_data_seed(self):
+        assert (ROOT / "templates" / "seeds" / "raw_sample_data.csv").exists()
+
     def test_singular_test_template(self):
         assert (ROOT / "templates" / "tests" / "template_singular.sql").exists()
 
@@ -207,9 +210,23 @@ class TestTDDTemplateSections:
         assert "link_status" in t11_section.lower() or "Link Status" in t11_section, \
             "T-11 missing link_status in traceability"
 
+    def test_t6_has_column_spec_and_ods_contract(self):
+        content = (ROOT / "templates" / "tech-design-doc.template.md").read_text()
+        t6_start = content.find("## T-6")
+        t7_start = content.find("## T-7")
+        assert t6_start > 0 and t7_start > t6_start
+        t6_section = content[t6_start:t7_start]
+        assert "column_name" in t6_section, "T-6 missing column spec table"
+        assert "calculation" in t6_section, "T-6 missing calculation column"
+        assert "Grain" in t6_section, "T-6 missing ODS contract Grain"
+        assert "Incremental Strategy" in t6_section, "T-6 missing ODS contract Incremental Strategy"
+        assert "Unique Key" in t6_section, "T-6 missing ODS contract Unique Key"
+        assert "Provenance" in t6_section, "T-6 missing ODS contract Provenance"
+        assert "not_applicable" in t6_section, "T-6 missing N/A rationale provision"
+
     def test_all_table_sections_have_not_applicable_provision(self):
         content = (ROOT / "templates" / "tech-design-doc.template.md").read_text()
-        for section_label in ["T-7", "T-8", "T-9", "T-10", "T-11"]:
+        for section_label in ["T-6", "T-7", "T-8", "T-9", "T-10", "T-11"]:
             start = content.find(f"## {section_label}")
             next_num = int(section_label.split("-")[1]) + 1
             end = content.find(f"## T-{next_num}")

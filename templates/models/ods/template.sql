@@ -1,49 +1,42 @@
 {{
   config(
     materialized='incremental',
-    unique_key=var('ods_unique_key', ['pull_date', 'record_id']),
+    unique_key=['pull_date', 'record_id'],
     incremental_strategy='delete+insert'
   )
 }}
 
 {#
-  ODS Model Template — Raw Ingestion Layer
-
-  Replace placeholders with actual source configuration from signed TDD.
-  Rules:
-  - No business logic transformations
-  - Explicit column list (no SELECT *)
-  - Provenance columns required on every row
-  - Idempotent: re-running same partition produces identical output
-
-  ODS Contract fields (from TDD T-6):
-  - source, grain, logical_partition, incremental_strategy
-  - unique_key, backfill, restatement, provenance_columns
+  ODS Model — Raw Ingestion Layer
+  Grain: one row per record per pull_date.
+  Strategy: delete+insert on pull_date partition.
+  All columns explicit, provenance carried on every row.
+  Idempotent: re-running same partition produces identical output.
 #}
 
 with source_data as (
     select
-        -- Source columns: explicit list from TDD T-5 (replace with actual columns)
-        cast(null as varchar) as record_id,
-        cast(null as date) as pull_date,
-
-        -- Provenance columns (required on every ODS row)
-        '{{ var("provider", "unknown") }}' as provider,
-        current_timestamp as pull_ts_utc,
-        cast(null as timestamp) as quote_ts_utc,
-        '{{ var("run_id", "manual") }}' as run_id
-
-    from {{ source('raw', 'source_table') }}
-
+        record_id,
+        cast(pull_date as date) as pull_date,
+        cast(amount as decimal(10,2)) as amount,
+        customer_id,
+        customer_name,
+        provider,
+        cast(pull_ts_utc as timestamp) as pull_ts_utc,
+        cast(quote_ts_utc as timestamp) as quote_ts_utc,
+        run_id
+    from {{ ref('raw_sample_data') }}
     {% if is_incremental() %}
-    where {{ var('partition_column', 'pull_date') }}
-        >= '{{ var("partition_date", (modules.datetime.datetime.now() - modules.datetime.timedelta(days=1)).strftime("%Y-%m-%d")) }}'
+    where cast(pull_date as date) >= cast('{{ var("partition_date", "2020-01-01") }}' as date)
     {% endif %}
 )
 
 select
     record_id,
     pull_date,
+    amount,
+    customer_id,
+    customer_name,
     provider,
     pull_ts_utc,
     quote_ts_utc,

@@ -2,31 +2,92 @@
 mart-forge scaffold — Generate a dbt project from a signed BRD/TDD.
 
 Enforces structural contract validation:
-- BRD must have all mandatory sections (B-1..B-4) with metric catalog
-- TDD must have all mandatory sections (T-1..T-17) with table coverage
+- BRD must have all mandatory sections (B-1..B-4) with populated metric catalog
+- TDD must have all mandatory sections (T-1..T-17) with per-layer column specs
+- Grade A or explicit APPROVED required; Grade B and below rejected
 - No unverified link_status at sign-off
-- Explicit sign-off markers required
-- Produces a complete dbt project skeleton with SQL models, DQC assets, and dashboard
+- Each metric must declare valid source_type and resolved link_status
+- Bare heading vocabulary and bare N/A tokens rejected
+- Produces a complete, runnable dbt project with SQL models, DQC assets, and dashboard
 """
 
 import json
+import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
 from mart_forge._resources import get_resource_root
 
-SIGN_OFF_MARKERS = ["Grade: A", "Grade: B", "Sign-off:", "APPROVED", "Signed"]
-
 BRD_REQUIRED_SECTIONS = ["B-1", "B-2", "B-3", "B-4"]
 TDD_REQUIRED_SECTIONS = [f"T-{i}" for i in range(1, 18)]
+
+COLUMN_SPEC_FIELDS = [
+    "column_name", "data_type", "definition",
+    "example_value", "calculation", "data_source",
+]
+
+VALID_SOURCE_TYPES = {"native", "derived", "hybrid"}
+VALID_LINK_STATUSES = {"exact", "proxy", "unsupported"}
+
+MODEL_NAMES = {
+    "ods": "{prefix}_ods_csv_sample",
+    "dim": "{prefix}_dim_date",
+    "dwd": "{prefix}_dwd_daily_sample_di",
+    "dws": "{prefix}_dws_daily_revenue_1d",
+    "ads": "{prefix}_ads_exec_dashboard",
+}
+
+TABLE_SECTIONS = {
+    "T-6": {"label": "ODS", "extra": ["Grain", "Incremental Strategy", "Unique Key", "Provenance"]},
+    "T-7": {"label": "DIM", "extra": []},
+    "T-8": {"label": "DWD", "extra": ["source_type", "provenance"]},
+    "T-9": {"label": "DWS-Count", "extra": []},
+    "T-10": {"label": "DWS-Perf", "extra": []},
+    "T-11": {"label": "ADS", "extra": ["BRD"]},
+}
+
+
+def _sanitize_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9_]", "_", name.lower().replace("-", "_"))
 
 
 def _is_signed(doc_path: Path) -> bool:
     if not doc_path.exists():
         return False
     content = doc_path.read_text()
-    return any(marker in content for marker in SIGN_OFF_MARKERS)
+    if re.search(r"Grade:\s*[BCDF]", content):
+        return False
+    return "Grade: A" in content or "APPROVED" in content
+
+
+def _extract_section(content: str, label: str, next_label: str | None) -> str:
+    start = content.find(f"## {label}")
+    if start < 0:
+        start = content.find(label)
+    if start < 0:
+        return ""
+    if next_label:
+        end = content.find(f"## {next_label}")
+        if end < 0:
+            end = content.find(next_label)
+        if end < 0 or end <= start:
+            end = len(content)
+    else:
+        end = len(content)
+    return content[start:end]
+
+
+def _section_has_content(section_text: str, heading: str) -> bool:
+    lines = section_text.splitlines()
+    content_lines = [
+        l.strip() for l in lines
+        if l.strip()
+        and not l.strip().startswith("#")
+        and l.strip() != heading
+        and not l.strip().startswith("---")
+    ]
+    return len(content_lines) >= 1
 
 
 def _validate_brd(brd_path: Path) -> list[str]:
@@ -37,20 +98,47 @@ def _validate_brd(brd_path: Path) -> list[str]:
     content = brd_path.read_text()
 
     if not _is_signed(brd_path):
-        errors.append("BRD exists but is not signed off. Get BRD approval before proceeding.")
+        errors.append("BRD exists but is not signed off. Require Grade: A or APPROVED.")
 
-    for section in BRD_REQUIRED_SECTIONS:
-        if f"## {section}" not in content and f"# {section}" not in content:
-            if section not in content:
-                errors.append(f"BRD missing mandatory section {section}.")
+    for i, section in enumerate(BRD_REQUIRED_SECTIONS):
+        if section not in content:
+            errors.append(f"BRD missing mandatory section {section}.")
+            continue
+        next_section = BRD_REQUIRED_SECTIONS[i + 1] if i + 1 < len(BRD_REQUIRED_SECTIONS) else None
+        section_text = _extract_section(content, section, next_section)
+        if not _section_has_content(section_text, section):
+            errors.append(f"BRD section {section} has no substantive content (bare heading).")
 
-    if "source_type" not in content and ("native" not in content or "derived" not in content):
-        errors.append("BRD missing metric source_type classification (native/derived/hybrid).")
+    b3_text = _extract_section(content, "B-3", "B-4")
+    if b3_text:
+        has_source_type = any(st in b3_text.lower() for st in VALID_SOURCE_TYPES)
+        if not has_source_type:
+            errors.append("BRD B-3 metric catalog missing source_type classification (native/derived/hybrid).")
+        has_link_status = any(ls in b3_text.lower() for ls in VALID_LINK_STATUSES)
+        if not has_link_status:
+            errors.append("BRD B-3 metric catalog missing link_status (exact/proxy/unsupported).")
+        table_rows = [
+            l for l in b3_text.splitlines()
+            if "|" in l
+            and l.strip().startswith("|")
+            and not re.match(r"^\s*\|[\s\-|]+\|\s*$", l)
+        ]
+        header_keywords = {"metric", "source_type", "link_status", "definition"}
+        data_rows = [
+            r for r in table_rows
+            if not all(kw in r.lower() for kw in {"metric"})
+            or any(st in r.lower() for st in VALID_SOURCE_TYPES)
+        ]
+        if len(data_rows) < 2:
+            errors.append("BRD B-3 metric catalog has no populated metric rows.")
 
-    if "link_status" not in content and not any(
-        s in content for s in ["exact", "proxy", "unsupported"]
-    ):
-        errors.append("BRD missing link_status classification (exact/proxy/unsupported).")
+    if "source_type" not in content and "source type" not in content.lower():
+        if not any(s in content for s in ["native", "derived", "hybrid"]):
+            errors.append("BRD missing metric source_type classification (native/derived/hybrid).")
+
+    if "link_status" not in content and "link status" not in content.lower():
+        if not any(s in content for s in ["exact", "proxy", "unsupported"]):
+            errors.append("BRD missing link_status classification (exact/proxy/unsupported).")
 
     if "unverified" in content.lower():
         errors.append("BRD contains 'unverified' link_status — all links must be resolved before sign-off.")
@@ -66,42 +154,55 @@ def _validate_tdd(tdd_path: Path) -> list[str]:
     content = tdd_path.read_text()
 
     if not _is_signed(tdd_path):
-        errors.append("TDD exists but is not signed off. Get TDD approval before proceeding.")
+        errors.append("TDD exists but is not signed off. Require Grade: A or APPROVED.")
 
     for section in TDD_REQUIRED_SECTIONS:
         if section not in content:
             errors.append(f"TDD missing mandatory section {section}.")
 
-    table_sections = {"T-7": "ODS", "T-8": "DIM", "T-9": "DWD", "T-10": "DWS", "T-11": "ADS"}
     has_any_table = False
-    for label, layer in table_sections.items():
-        start = content.find(f"## {label}")
-        if start < 0:
-            start = content.find(label)
-        if start < 0:
+    for section_label, spec in TABLE_SECTIONS.items():
+        next_num = int(section_label.split("-")[1]) + 1
+        next_label = f"T-{next_num}"
+        section_text = _extract_section(content, section_label, next_label)
+
+        if not section_text:
+            errors.append(f"TDD {section_label} ({spec['label']}) section not found.")
             continue
 
-        next_num = int(label.split("-")[1]) + 1
-        end = content.find(f"## T-{next_num}")
-        if end < 0:
-            end = content.find(f"T-{next_num}")
-        if end < 0 or end <= start:
-            end = len(content)
-
-        section_text = content[start:end]
-
         has_column_spec = "column_name" in section_text
-        is_na_only = not has_column_spec and (
-            "not_applicable" in section_text.lower() or "n/a" in section_text.lower()
-        )
-        if is_na_only:
+        has_na = "not_applicable" in section_text.lower()
+
+        if not has_column_spec and has_na:
+            na_line_idx = None
+            lines = section_text.splitlines()
+            for idx, line in enumerate(lines):
+                if "not_applicable" in line.lower():
+                    na_line_idx = idx
+                    break
+            if na_line_idx is not None:
+                remaining = " ".join(lines[na_line_idx:]).strip()
+                remaining = remaining.replace("not_applicable", "").strip()
+                remaining = re.sub(r"[*_#|{}\-\s]", "", remaining)
+                if len(remaining) < 10:
+                    errors.append(
+                        f"TDD {section_label} ({spec['label']}) has bare not_applicable without rationale."
+                    )
+                    continue
+            continue
+
+        if not has_column_spec and not has_na:
+            errors.append(f"TDD {section_label} ({spec['label']}) missing column specification table.")
             continue
 
         has_any_table = True
-        required_fields = ["column_name", "data_type"]
-        for field in required_fields:
+        for field in COLUMN_SPEC_FIELDS:
             if field not in section_text:
-                errors.append(f"TDD {label} ({layer}) missing required field: {field}")
+                errors.append(f"TDD {section_label} ({spec['label']}) missing column spec field: {field}")
+
+        for extra in spec["extra"]:
+            if extra.lower() not in section_text.lower():
+                errors.append(f"TDD {section_label} ({spec['label']}) missing required element: {extra}")
 
     if not has_any_table:
         errors.append("TDD has no table sections with column specifications — at least one layer required.")
@@ -120,7 +221,7 @@ def _check_gates(mart_dir: Path) -> list[str]:
 
 
 def scaffold(mart_dir: Path, mart_name: str, prefix: str) -> dict:
-    """Generate a dbt project skeleton in mart_dir."""
+    """Generate a runnable dbt project skeleton in mart_dir."""
     gate_errors = _check_gates(mart_dir)
     if gate_errors:
         return {"success": False, "errors": gate_errors, "files_created": []}
@@ -130,13 +231,15 @@ def scaffold(mart_dir: Path, mart_name: str, prefix: str) -> dict:
     scripts_dir = resource_root / "scripts"
     files_created = []
 
+    safe_name = _sanitize_name(mart_name)
+
     # dbt_project.yml
     dbt_project = mart_dir / "dbt_project.yml"
     dbt_project.write_text(
-        f"name: '{mart_name}'\n"
+        f"name: '{safe_name}'\n"
         f"version: '1.0.0'\n"
         f"config-version: 2\n"
-        f"profile: '{mart_name}'\n"
+        f"profile: '{safe_name}'\n"
         f"\n"
         f"model-paths: ['models']\n"
         f"seed-paths: ['seeds']\n"
@@ -151,81 +254,142 @@ def scaffold(mart_dir: Path, mart_name: str, prefix: str) -> dict:
     # profiles.yml
     profiles = mart_dir / "profiles.yml"
     profiles.write_text(
-        f"{mart_name}:\n"
+        f"{safe_name}:\n"
         f"  target: dev\n"
         f"  outputs:\n"
         f"    dev:\n"
         f"      type: duckdb\n"
-        f"      path: '{mart_name}.duckdb'\n"
+        f"      path: '{safe_name}.duckdb'\n"
         f"    ci:\n"
         f"      type: duckdb\n"
-        f"      path: ':memory:'\n"
+        f"      path: 'ci.duckdb'\n"
     )
     files_created.append("profiles.yml")
 
-    # Model SQL files from templates
-    for layer in ["ods", "dim", "dwd", "dws", "ads"]:
+    # Model SQL files — render templates with {prefix} substitution
+    for layer, model_pattern in MODEL_NAMES.items():
         layer_dir = mart_dir / "models" / layer
         layer_dir.mkdir(parents=True, exist_ok=True)
         template_sql = templates_dir / "models" / layer / "template.sql"
         if template_sql.exists():
-            target_name = f"{prefix}_{layer}_template.sql"
-            shutil.copy2(template_sql, layer_dir / target_name)
-            files_created.append(f"models/{layer}/{target_name}")
+            content = template_sql.read_text()
+            content = content.replace("{prefix}", prefix)
+            model_name = model_pattern.replace("{prefix}", prefix)
+            target_file = layer_dir / f"{model_name}.sql"
+            target_file.write_text(content)
+            files_created.append(f"models/{layer}/{model_name}.sql")
 
-    # Seeds directory
+    # Seeds — both raw_sample_data and dim_date
     seeds_dir = mart_dir / "seeds"
     seeds_dir.mkdir(exist_ok=True)
-    dim_date_src = templates_dir / "seeds" / "dim_date.csv"
-    if dim_date_src.exists():
-        shutil.copy2(dim_date_src, seeds_dir / "dim_date.csv")
-        files_created.append("seeds/dim_date.csv")
+    for seed_name in ["raw_sample_data.csv", "dim_date.csv"]:
+        seed_src = templates_dir / "seeds" / seed_name
+        if seed_src.exists():
+            shutil.copy2(seed_src, seeds_dir / seed_name)
+            files_created.append(f"seeds/{seed_name}")
 
-    # Tests directory with singular test template
+    # Tests directory with runnable singular test
     tests_dir = mart_dir / "tests"
     tests_dir.mkdir(exist_ok=True)
-    singular_src = templates_dir / "tests" / "template_singular.sql"
-    if singular_src.exists():
-        shutil.copy2(singular_src, tests_dir / "template_singular.sql")
-        files_created.append("tests/template_singular.sql")
+    ods_model = MODEL_NAMES["ods"].replace("{prefix}", prefix)
+    test_content = (
+        f"-- Validates: no duplicate primary keys in ODS (record_id + pull_date)\n"
+        f"-- Control class: Duplicate Detection\n"
+        f"-- Severity: error\n\n"
+        f"select\n"
+        f"    record_id,\n"
+        f"    pull_date,\n"
+        f"    count(*) as row_count\n"
+        f"from {{{{ ref('{ods_model}') }}}}\n"
+        f"group by record_id, pull_date\n"
+        f"having count(*) > 1\n"
+    )
+    test_file = tests_dir / f"test_{prefix}_ods_no_duplicate_keys.sql"
+    test_file.write_text(test_content)
+    files_created.append(f"tests/test_{prefix}_ods_no_duplicate_keys.sql")
 
-    # schema.yml skeleton
+    # schema.yml with all models and generic tests
     schema = mart_dir / "models" / "schema.yml"
+    dwd_model = MODEL_NAMES["dwd"].replace("{prefix}", prefix)
+    dim_model = MODEL_NAMES["dim"].replace("{prefix}", prefix)
+    dws_model = MODEL_NAMES["dws"].replace("{prefix}", prefix)
+    ads_model = MODEL_NAMES["ads"].replace("{prefix}", prefix)
     schema.write_text(
-        f"version: 2\n"
-        f"\n"
+        f"version: 2\n\n"
         f"models:\n"
-        f"  - name: {prefix}_dim_date\n"
+        f"  - name: {ods_model}\n"
+        f"    description: 'ODS layer — raw ingestion from sample CSV'\n"
+        f"    columns:\n"
+        f"      - name: record_id\n"
+        f"        tests:\n"
+        f"          - not_null\n"
+        f"      - name: pull_date\n"
+        f"        tests:\n"
+        f"          - not_null\n\n"
+        f"  - name: {dim_model}\n"
         f"    description: 'Date dimension (seed-backed)'\n"
         f"    columns:\n"
         f"      - name: date_sk\n"
         f"        tests:\n"
+        f"          - not_null\n\n"
+        f"  - name: {dwd_model}\n"
+        f"    description: 'DWD fact — daily order line detail'\n"
+        f"    columns:\n"
+        f"      - name: order_line_sk\n"
+        f"        tests:\n"
         f"          - not_null\n"
         f"          - unique\n"
-        f"\n"
+        f"      - name: date_key\n"
+        f"        tests:\n"
+        f"          - not_null\n"
+        f"          - relationships:\n"
+        f"              to: ref('{dim_model}')\n"
+        f"              field: date_sk\n\n"
+        f"  - name: {dws_model}\n"
+        f"    description: 'DWS — daily revenue aggregation'\n"
+        f"    columns:\n"
+        f"      - name: date_key\n"
+        f"        tests:\n"
+        f"          - not_null\n"
+        f"      - name: order_count\n"
+        f"        tests:\n"
+        f"          - not_null\n"
+        f"      - name: daily_revenue\n"
+        f"        tests:\n"
+        f"          - not_null\n\n"
+        f"  - name: {ads_model}\n"
+        f"    description: 'ADS — executive dashboard OBT'\n"
+        f"    columns:\n"
+        f"      - name: calendar_date\n"
+        f"        tests:\n"
+        f"          - not_null\n"
+        f"      - name: order_count\n"
+        f"        tests:\n"
+        f"          - not_null\n"
+        f"      - name: daily_revenue\n"
+        f"        tests:\n"
+        f"          - not_null\n\n"
         f"seeds:\n"
+        f"  - name: raw_sample_data\n"
+        f"    description: 'Sample order data for fixture/demo'\n"
         f"  - name: dim_date\n"
         f"    description: 'Calendar seed with business day flags'\n"
     )
     files_created.append("models/schema.yml")
 
-    # Dashboard — copy template and substitute mart_name
+    # Dashboard — render template with mart_name, prefix, db_name substitution
     dash_dir = mart_dir / "dashboard"
     dash_dir.mkdir(exist_ok=True)
     dash_template = templates_dir / "dashboard" / "app.py"
     if dash_template.exists():
         dash_content = dash_template.read_text()
         dash_content = dash_content.replace("{mart_name}", mart_name)
+        dash_content = dash_content.replace("{prefix}", prefix)
+        dash_content = dash_content.replace("{db_name}", safe_name)
         (dash_dir / "app.py").write_text(dash_content)
-    else:
-        (dash_dir / "app.py").write_text(_generate_dashboard_fallback(mart_name))
     files_created.append("dashboard/app.py")
 
-    dash_reqs_src = templates_dir / "dashboard" / "requirements.txt"
-    if dash_reqs_src.exists():
-        shutil.copy2(dash_reqs_src, dash_dir / "requirements.txt")
-    else:
-        (dash_dir / "requirements.txt").write_text("streamlit>=1.30\nduckdb>=0.10\n")
+    (dash_dir / "requirements.txt").write_text("streamlit>=1.30\nduckdb>=0.10\n")
     files_created.append("dashboard/requirements.txt")
 
     # DQC scorecard template
@@ -237,7 +401,7 @@ def scaffold(mart_dir: Path, mart_name: str, prefix: str) -> dict:
     }, indent=2))
     files_created.append("dqc_scorecard.json")
 
-    # DQC update script (Finding #4 — pipeline references this)
+    # DQC update script
     mart_scripts_dir = mart_dir / "scripts"
     mart_scripts_dir.mkdir(exist_ok=True)
     dqc_script_src = scripts_dir / "dqc_update.py"
@@ -261,22 +425,8 @@ def scaffold(mart_dir: Path, mart_name: str, prefix: str) -> dict:
         (ci_dir / "daily.yml").write_text(content)
         files_created.append(".github/workflows/daily.yml")
 
+    # Macros directory (dbt expects it)
+    (mart_dir / "macros").mkdir(exist_ok=True)
+    (mart_dir / "analyses").mkdir(exist_ok=True)
+
     return {"success": True, "errors": [], "files_created": files_created}
-
-
-def _generate_dashboard_fallback(mart_name: str) -> str:
-    return (
-        f'"""{mart_name} Dashboard — Generated by mart-forge scaffold."""\n\n'
-        f'import streamlit as st\n\n'
-        f'st.set_page_config(page_title="{mart_name} Dashboard", layout="wide")\n'
-        f'st.title("{mart_name} Dashboard")\n'
-        f'st.header("Data Quality")\n'
-        f'st.info("Run `dbt test` then `dqc-update` to populate the scorecard.")\n'
-        f'st.header("Metrics")\n'
-        f'st.info("Metric cards generated from TDD dashboard specification.")\n'
-        f'st.header("Data Provenance")\n'
-        f'st.markdown("| Field | Description |\\n'
-        f'|-------|------------|\\n'
-        f'| provider | Data source identifier |\\n'
-        f'| pull_ts_utc | When ingestion ran |")\n'
-    )

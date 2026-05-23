@@ -1,36 +1,33 @@
 {{
   config(
     materialized='incremental',
-    unique_key='fact_sk',
+    unique_key='order_line_sk',
     incremental_strategy='delete+insert'
   )
 }}
 
 {#
-  DWD Model Template — Cleaned Facts with Business Keys
-
-  Rules:
-  - Business key deduplication from ODS
-  - Native fields: pass-through with field mapping (no computation)
-  - Derived fields: explicit SQL/formula from TDD T-8 calculation column
-  - Surrogate keys: native md5 hash — no external package dependency
-  - Natural keys preserved for lineage
-  - Source_type classification per metric column (native/derived/hybrid)
-  - Explicit column list — no SELECT *
+  DWD Model — Cleaned Facts with Business Keys
+  Grain: one row per order line per pull_date.
+  Dedup: record_id + pull_date, latest pull_ts_utc wins.
+  Native metric: amount (pass-through from ODS, source_type: native).
+  Surrogate key: md5 hash (no external package dependency).
 #}
 
 with ods_source as (
     select
         record_id,
         pull_date,
-        -- Add explicit source columns from TDD T-5/T-6 here
+        amount,
+        customer_id,
+        customer_name,
         provider,
         pull_ts_utc,
         quote_ts_utc,
         run_id
-    from {{ ref('prefix_ods_source_entity') }}
+    from {{ ref('{prefix}_ods_csv_sample') }}
     {% if is_incremental() %}
-    where pull_date >= '{{ var("partition_date", (modules.datetime.datetime.now() - modules.datetime.timedelta(days=1)).strftime("%Y-%m-%d")) }}'
+    where pull_date >= cast('{{ var("partition_date", "2020-01-01") }}' as date)
     {% endif %}
 ),
 
@@ -38,6 +35,9 @@ deduped as (
     select
         record_id,
         pull_date,
+        amount,
+        customer_id,
+        customer_name,
         provider,
         pull_ts_utc,
         quote_ts_utc,
@@ -51,33 +51,29 @@ deduped as (
 
 with_keys as (
     select
-        -- Surrogate key (native hash — no external dependency)
-        md5(cast(record_id as varchar) || '|' || cast(pull_date as varchar)) as fact_sk,
-
-        -- Dimension foreign keys (unknown member -1 if NULL)
+        md5(cast(s.record_id as varchar) || '|' || cast(s.pull_date as varchar)) as order_line_sk,
         coalesce(d.date_sk, -1) as date_key,
-
-        -- Native metric columns: pass-through from TDD T-8
-        -- s.source_field as metric_name,
-
-        -- Derived metric columns: explicit SQL from TDD T-8
-        -- s.field_a * s.field_b as derived_metric,
-
-        -- Provenance (carried from ODS)
+        s.record_id,
+        s.customer_id,
+        s.customer_name,
+        s.amount,
         s.provider,
         s.pull_ts_utc,
         s.quote_ts_utc,
         s.run_id
-
     from deduped s
-    left join {{ ref('prefix_dim_date') }} d
+    left join {{ ref('{prefix}_dim_date') }} d
         on s.pull_date = d.calendar_date
     where s._dedup_rank = 1
 )
 
 select
-    fact_sk,
+    order_line_sk,
     date_key,
+    record_id,
+    customer_id,
+    customer_name,
+    amount,
     provider,
     pull_ts_utc,
     quote_ts_utc,

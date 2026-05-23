@@ -5,40 +5,47 @@
 }}
 
 {#
-  DIM Model Template — Conformed Dimension
-
-  Rules:
-  - Seed-backed where applicable
-  - Unknown member row (surrogate_key = -1, all attributes = 'Unknown')
-  - SCD strategy declared per attribute (Type 0 / Type 1 / Type 2)
-  - Explicit column list — no SELECT *
-
-  For Type 2 dimensions, add:
-    effective_from, effective_to, is_current columns
+  DIM Model — Date Dimension (seed-backed, Type 0 immutable)
+  Unknown member row: date_sk = -1, attributes = 'Unknown' / 0.
 #}
 
 with seed_data as (
     select
-        entity_id,
-        entity_name
-    from {{ ref('seed_dim_entity') }}
+        date_sk,
+        cast(calendar_date as date) as calendar_date,
+        year,
+        quarter,
+        month,
+        month_name,
+        day_of_month,
+        day_of_week,
+        day_name,
+        cast(is_weekend as boolean) as is_weekend,
+        cast(is_business_day as boolean) as is_business_day,
+        week_of_year
+    from {{ ref('dim_date') }}
 ),
 
 unknown_member as (
     select
-        -1 as entity_sk,
-        'UNKNOWN' as entity_id,
-        'Unknown' as entity_name
-),
-
-numbered as (
-    select
-        row_number() over (order by entity_id) as entity_sk,
-        entity_id,
-        entity_name
-    from seed_data
+        -1 as date_sk,
+        cast('1900-01-01' as date) as calendar_date,
+        0 as year,
+        0 as quarter,
+        0 as month,
+        'Unknown' as month_name,
+        0 as day_of_month,
+        0 as day_of_week,
+        'Unknown' as day_name,
+        false as is_weekend,
+        false as is_business_day,
+        0 as week_of_year
 )
 
-select entity_sk, entity_id, entity_name from numbered
+select date_sk, calendar_date, year, quarter, month, month_name,
+       day_of_month, day_of_week, day_name, is_weekend, is_business_day, week_of_year
+from seed_data
 union all
-select entity_sk, entity_id, entity_name from unknown_member
+select date_sk, calendar_date, year, quarter, month, month_name,
+       day_of_month, day_of_week, day_name, is_weekend, is_business_day, week_of_year
+from unknown_member

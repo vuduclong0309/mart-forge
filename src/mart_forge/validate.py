@@ -2,7 +2,7 @@
 
 Validates framework templates, skills, and documentation exist and
 contain mandatory structural content. Performs per-section validation
-of TDD table layers (T-7..T-11) for complete column specification.
+of TDD table layers (T-6..T-11) for complete column specification.
 """
 
 import sys
@@ -20,6 +20,7 @@ REQUIRED_FILES = [
     "templates/models/dws/template.sql",
     "templates/models/ads/template.sql",
     "templates/seeds/dim_date.csv",
+    "templates/seeds/raw_sample_data.csv",
     "templates/tests/template_singular.sql",
     "templates/dashboard/app.py",
     "templates/pipeline/daily.yml.template",
@@ -46,6 +47,7 @@ COLUMN_SPEC_FIELDS = [
 ]
 
 TABLE_SECTIONS = {
+    "T-6": {"label": "ODS", "extra": ["Grain", "Incremental Strategy", "Unique Key", "Provenance"]},
     "T-7": {"label": "DIM", "extra": []},
     "T-8": {"label": "DWD", "extra": ["source_type", "provenance"]},
     "T-9": {"label": "DWS-Count", "extra": []},
@@ -124,12 +126,6 @@ def validate_framework(root: Path | None = None) -> bool:
                 issues.append(f"TDD template missing section {s}")
 
         issues.extend(_check_tdd_table_sections(content))
-
-        t6_text = _extract_section(content, "T-6", "T-7")
-        if t6_text:
-            for ods_field in ["Grain", "Incremental Strategy", "Unique Key", "Provenance"]:
-                if ods_field.lower() not in t6_text.lower():
-                    issues.append(f"T-6 (ODS Contract) missing required field: {ods_field}")
 
         if "idempoten" not in content.lower():
             issues.append("TDD template missing idempotence reference")

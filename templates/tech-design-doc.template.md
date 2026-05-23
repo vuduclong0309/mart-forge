@@ -137,6 +137,24 @@ Source(s)
 
 **Idempotence:** Running the same partition twice produces identical output. CI includes rerun test.
 
+**Column specification (6-column format):**
+
+| column_name | data_type | definition | example_value | calculation | data_source |
+|-------------|-----------|-----------|---------------|------------|-------------|
+| record_id | VARCHAR | Source record identifier | 'ORD-001' | source.record_id -> pass-through | {source} |
+| pull_date | DATE | Logical partition date | '2026-01-01' | source.pull_date -> pass-through | {source} |
+| {metric_column} | {type} | {definition} | {example} | source.{field} -> pass-through (native) | {source} |
+| provider | VARCHAR | Source identifier [provenance] | 'csv_provider' | source.provider -> pass-through | {source} |
+| pull_ts_utc | TIMESTAMP | Ingestion timestamp [provenance] | '2026-01-01T06:00:00Z' | source.pull_ts_utc -> pass-through | {source} |
+| quote_ts_utc | TIMESTAMP | Source data timestamp [provenance] | '2026-01-01T05:30:00Z' | source.quote_ts_utc -> pass-through | {source} |
+| run_id | VARCHAR | Pipeline run trace [provenance] | 'uuid-here' | source.run_id -> pass-through | {source} |
+
+{Repeat the full column specification table for each ODS table.}
+{If this table type is not required, provide a signed not_applicable rationale below.}
+
+**not_applicable rationale (if this table type is not required):**
+{Rationale with sign-off stamp}
+
 ---
 
 ## T-7. Dimension Table Design

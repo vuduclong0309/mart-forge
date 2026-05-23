@@ -1,11 +1,12 @@
 """Scaffold workflow tests.
 
-Tests structural contract validation (not just approval-token presence),
-rejection of incomplete BRD/TDD, and generation of a complete dbt skeleton
-with SQL models, DQC assets, dashboard, and pipeline scripts.
+Tests structural contract validation, rejection of incomplete/undergraded
+BRD/TDD, name sanitization, and generation of a complete runnable dbt
+skeleton with SQL models, DQC assets, dashboard, and pipeline scripts.
 """
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -25,20 +26,21 @@ This mart covers order processing for the generic test domain.
 | ID | Question | Priority |
 |----|----------|----------|
 | Q-1 | What is total daily revenue? | High |
+| Q-2 | How many orders per day? | High |
 
 ## B-3. Metric Catalog
 
 | Metric | source_type | link_status | Definition |
 |--------|-------------|-------------|------------|
 | M-1 Revenue | native | exact | Sum of order amounts from source |
-| M-2 Margin | derived | proxy | Revenue minus cost, advisory comparison only |
+| M-2 Order Count | derived | proxy | Count of distinct orders, advisory comparison only |
 
-## B-4. Source–Link Evidence
+## B-4. Source-Link Evidence
 
 | Metric | Source | Link | Evidence |
 |--------|--------|------|----------|
 | M-1 | orders.csv | exact | Field mapping: amount -> revenue |
-| M-2 | calculated | proxy | Derived from M-1 minus costs |
+| M-2 | calculated | proxy | Derived from count of ODS records |
 
 Sign-off: APPROVED
 Grade: A
@@ -55,83 +57,95 @@ VALID_TDD = """\
 ## T-2. Design Reasoning
 Grain: one row per order line per day.
 
-## T-3. Source Systems
-CSV file ingestion.
+## T-3. Table Summary
+| Table Name | Layer | Purpose | Grain | Materialization |
+|------------|-------|---------|-------|-----------------|
+| tst_ods_csv_sample | ODS | Raw ingestion | one row per record per pull_date | incremental |
 
-## T-4. Data Flow
-ODS -> DIM -> DWD -> DWS -> ADS
+## T-4. Data Architecture Diagram
+ODS -> DWD -> DWS -> ADS, DIM referenced by DWD.
 
-## T-5. Source Mapping
-| source_column | target_column |
-|---------------|---------------|
-| order_id | order_id |
+## T-5. Column Specification
+Per-table specs follow in T-6 through T-11.
 
-## T-6. ODS Contract
-| Property | Value |
-|----------|-------|
-| Grain | One row per order line per pull_date |
+## T-6. ODS Table Design
+
+| Field | Value |
+|-------|-------|
+| Source | csv_provider |
+| Grain | One row per record per pull_date |
 | Logical Partition | pull_date |
 | Incremental Strategy | delete+insert |
-| Unique Key | order_id, pull_date |
+| Unique Key | ['pull_date', 'record_id'] |
 | Backfill | Full reload per partition |
 | Restatement | Re-pull same partition date |
-| Provenance | provider, pull_ts_utc, quote_ts_utc, run_id |
-| Idempotence | Re-running same partition produces identical output |
+| Provenance Columns | provider, pull_ts_utc, quote_ts_utc, run_id |
 
-## T-7. ODS Table Design
+Idempotence: Re-running same partition produces identical output.
 
 | column_name | data_type | definition | example_value | calculation | data_source |
 |-------------|-----------|------------|---------------|-------------|-------------|
-| order_id | varchar | Order identifier | ORD-001 | not_applicable — direct field | orders.csv |
-| amount | decimal | Order amount | 99.50 | not_applicable — direct field | orders.csv |
+| record_id | VARCHAR | Source record identifier | ORD-001 | source.record_id -> pass-through | csv |
+| pull_date | DATE | Logical partition date | 2020-01-01 | source.pull_date -> pass-through | csv |
+| amount | DECIMAL | Order amount | 99.50 | source.amount -> pass-through | csv |
+| provider | VARCHAR | Source identifier | csv_provider | not_applicable — direct field | csv |
 
-## T-8. DIM Table Design
+## T-7. Dimension Table Design
+
+| column_name | data_type | definition | example_value | calculation | data_source |
+|-------------|-----------|------------|---------------|-------------|-------------|
+| date_sk | INTEGER | Surrogate key | 1 | row_number() over (order by calendar_date) | Generated |
+| calendar_date | DATE | Calendar date | 2020-01-01 | not_applicable — direct field from seed | dim_date.csv |
+
+## T-8. Fact Table Design (DWD)
 
 | column_name | data_type | definition | example_value | calculation | data_source | source_type |
 |-------------|-----------|------------|---------------|-------------|-------------|-------------|
-| customer_sk | integer | Surrogate key | 1 | md5(customer_id) | derived | derived |
-| customer_id | varchar | Natural key | CUST-001 | not_applicable — direct field | orders.csv | native |
+| order_line_sk | VARCHAR | Surrogate key | abc123 | md5(record_id || pull_date) | derived | derived |
+| date_key | INTEGER | FK to dim_date | 1 | coalesce(dim_date.date_sk, -1) | dim_date | native |
+| amount | DECIMAL | Order amount | 99.50 | not_applicable — pass-through from ODS | ods | native |
 
-Provenance columns: provider, pull_ts_utc, run_id
+Provenance columns: provider, pull_ts_utc, quote_ts_utc, run_id
 
-## T-9. DWD Table Design
-
-| column_name | data_type | definition | example_value | calculation | data_source |
-|-------------|-----------|------------|---------------|-------------|-------------|
-| order_line_sk | varchar | Surrogate key | abc123 | md5(order_id, line_id) | derived |
-| revenue | decimal | Line revenue | 50.00 | not_applicable — direct field | ods |
-
-## T-10. DWS Table Design
+## T-9. Count Aggregation Design (DWS)
 
 | column_name | data_type | definition | example_value | calculation | data_source |
 |-------------|-----------|------------|---------------|-------------|-------------|
-| date_sk | integer | Date key | 20260101 | not_applicable — FK to dim_date | dim_date |
-| daily_revenue | decimal | Total revenue | 1000.00 | sum(revenue) | dwd |
+| date_key | INTEGER | FK to dim_date | 1 | not_applicable — pass-through | DWD |
+| order_count | BIGINT | Daily order count | 3 | COUNT(DISTINCT record_id) | DWD aggregation |
+| daily_revenue | DECIMAL | Total daily revenue | 325.75 | SUM(amount) | DWD aggregation |
 
-## T-11. ADS Table Design
+## T-10. Performance Aggregation Design (DWS)
+
+not_applicable rationale: No performance/ratio metrics required for this basic order mart. All metrics are count and sum aggregations covered in T-9. Signed off.
+
+## T-11. Presentation Table Design (ADS)
 
 | column_name | data_type | definition | example_value | calculation | data_source | BRD_ref | link_status |
 |-------------|-----------|------------|---------------|-------------|-------------|---------|-------------|
-| total_revenue | decimal | Dashboard revenue | 5000.00 | sum(daily_revenue) | dws | M-1 | exact |
-| margin_pct | decimal | Margin percentage | 0.15 | not_applicable — placeholder | dws | M-2 | proxy |
+| calendar_date | DATE | Date context | 2020-01-01 | dim_date.calendar_date via join | dim_date | - | exact |
+| order_count | BIGINT | Daily orders | 3 | dws.order_count via join | DWS | M-1 | exact |
+| daily_revenue | DECIMAL | Daily revenue | 325.75 | dws.daily_revenue via join | DWS | M-2 | proxy |
 
-## T-12. DQC Control Matrix
-All 8 control classes addressed.
+## T-12. Physical Design
+Column-level specs provided in T-6 through T-11.
 
-## T-13. Naming Conventions
-Per mart-forge naming standard.
+## T-13. Implementation Specification
+dbt model configuration per naming conventions.
 
-## T-14. Incremental Strategy
-delete+insert on ODS/DWD layers.
+## T-14. DQC Plan
+All 8 control classes addressed per control catalog.
 
-## T-15. Pipeline Schedule
+## T-15. Test Inventory
+| Test Name | Type | Target Model |
+|-----------|------|-------------|
+| not_null_record_id | generic | ods |
+
+## T-16. Operations
 Daily at 06:00 UTC.
 
-## T-16. Dashboard Specification
-Sections: DQC scorecard, metric cards, trend chart, provenance.
-
-## T-17. Sign-off Checklist
-All items verified.
+## T-17. Known Limitations
+No external data sources for reconciliation.
 
 Sign-off: APPROVED
 Grade: A
@@ -177,7 +191,7 @@ class TestPlaceholderRejection:
     def test_rejects_partial_brd_missing_sections(self, mart_dir):
         mart_dir.mkdir()
         (mart_dir / "brd.md").write_text(
-            "# BRD\n\n## B-1 Scope\nSome scope.\n\nSign-off: APPROVED\n"
+            "# BRD\n\n## B-1. Scope\nSome scope text here.\n\nSign-off: APPROVED\nGrade: A\n"
         )
         (mart_dir / "tdd.md").write_text(VALID_TDD)
         result = scaffold(mart_dir, "test-mart", "tst")
@@ -212,6 +226,67 @@ class TestPlaceholderRejection:
         (mart_dir / "tdd.md").write_text(VALID_TDD)
         result = scaffold(mart_dir, "test-mart", "tst")
         assert not result["success"], "Scaffold accepted BRD without source_type classification"
+
+
+class TestGradeBRejection:
+    """Grade B and below must be rejected."""
+
+    def test_rejects_grade_b_brd(self, mart_dir):
+        mart_dir.mkdir()
+        grade_b_brd = VALID_BRD.replace("Grade: A", "Grade: B")
+        (mart_dir / "brd.md").write_text(grade_b_brd)
+        (mart_dir / "tdd.md").write_text(VALID_TDD)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"], "Scaffold accepted Grade B BRD"
+
+    def test_rejects_grade_b_tdd(self, mart_dir):
+        mart_dir.mkdir()
+        grade_b_tdd = VALID_TDD.replace("Grade: A", "Grade: B")
+        (mart_dir / "brd.md").write_text(VALID_BRD)
+        (mart_dir / "tdd.md").write_text(grade_b_tdd)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"], "Scaffold accepted Grade B TDD"
+
+    def test_rejects_grade_c(self, mart_dir):
+        mart_dir.mkdir()
+        grade_c_brd = VALID_BRD.replace("Grade: A", "Grade: C")
+        (mart_dir / "brd.md").write_text(grade_c_brd)
+        (mart_dir / "tdd.md").write_text(VALID_TDD)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"], "Scaffold accepted Grade C"
+
+
+class TestBareContentRejection:
+    """Bare heading vocabulary and bare N/A tokens must fail."""
+
+    def test_rejects_brd_bare_headings(self, mart_dir):
+        mart_dir.mkdir()
+        bare_brd = (
+            "# BRD\n\n"
+            "## B-1\n\n"
+            "## B-2\n\n"
+            "## B-3\n\n"
+            "## B-4\n\n"
+            "Sign-off: APPROVED\nGrade: A\n"
+        )
+        (mart_dir / "brd.md").write_text(bare_brd)
+        (mart_dir / "tdd.md").write_text(VALID_TDD)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"], "Scaffold accepted BRD with bare section headings"
+
+    def test_rejects_tdd_bare_na(self, mart_dir):
+        mart_dir.mkdir()
+        bare_na_tdd = VALID_TDD.replace(
+            "not_applicable rationale: No performance/ratio metrics required "
+            "for this basic order mart. All metrics are count and sum "
+            "aggregations covered in T-9. Signed off.",
+            "not_applicable"
+        )
+        (mart_dir / "brd.md").write_text(VALID_BRD)
+        (mart_dir / "tdd.md").write_text(bare_na_tdd)
+        result = scaffold(mart_dir, "test-mart", "tst")
+        assert not result["success"], "Scaffold accepted TDD with bare not_applicable (no rationale)"
+        assert any("bare" in e.lower() or "rationale" in e.lower() for e in result["errors"])
 
 
 class TestHardGateRejection:
@@ -269,24 +344,49 @@ class TestSuccessfulScaffold:
         dbt_project = signed_mart / "dbt_project.yml"
         assert dbt_project.exists()
         content = dbt_project.read_text()
-        assert "test-mart" in content
+        assert "test_mart" in content
         assert "model-paths" in content
+
+    def test_dbt_project_name_sanitized(self, signed_mart):
+        scaffold(signed_mart, "test-mart", "tst")
+        content = (signed_mart / "dbt_project.yml").read_text()
+        assert "test-mart" not in content, "dbt_project.yml has unsanitized kebab-case name"
+        assert "test_mart" in content
 
     def test_profiles_yml_created(self, signed_mart):
         scaffold(signed_mart, "test-mart", "tst")
         profiles = signed_mart / "profiles.yml"
         assert profiles.exists()
         content = profiles.read_text()
-        assert "test-mart" in content
+        assert "test_mart" in content
         assert "duckdb" in content
 
-    def test_model_sql_files_created(self, signed_mart):
+    def test_model_sql_files_created_with_semantic_names(self, signed_mart):
         scaffold(signed_mart, "test-mart", "tst")
-        for layer in ["ods", "dim", "dwd", "dws", "ads"]:
-            layer_dir = signed_mart / "models" / layer
-            assert layer_dir.is_dir(), f"Missing model directory: {layer}"
-            sql_files = list(layer_dir.glob("*.sql"))
-            assert len(sql_files) > 0, f"No SQL files in models/{layer}/"
+        expected_models = {
+            "ods": "tst_ods_csv_sample.sql",
+            "dim": "tst_dim_date.sql",
+            "dwd": "tst_dwd_daily_sample_di.sql",
+            "dws": "tst_dws_daily_revenue_1d.sql",
+            "ads": "tst_ads_exec_dashboard.sql",
+        }
+        for layer, filename in expected_models.items():
+            model_path = signed_mart / "models" / layer / filename
+            assert model_path.exists(), f"Missing model: models/{layer}/{filename}"
+
+    def test_model_refs_are_resolved(self, signed_mart):
+        scaffold(signed_mart, "test-mart", "tst")
+        dwd = (signed_mart / "models" / "dwd" / "tst_dwd_daily_sample_di.sql").read_text()
+        assert "ref('tst_ods_csv_sample')" in dwd
+        assert "ref('tst_dim_date')" in dwd
+        assert "{prefix}" not in dwd
+
+        dws = (signed_mart / "models" / "dws" / "tst_dws_daily_revenue_1d.sql").read_text()
+        assert "ref('tst_dwd_daily_sample_di')" in dws
+
+        ads = (signed_mart / "models" / "ads" / "tst_ads_exec_dashboard.sql").read_text()
+        assert "ref('tst_dws_daily_revenue_1d')" in ads
+        assert "ref('tst_dim_date')" in ads
 
     def test_model_sql_no_select_star(self, signed_mart):
         scaffold(signed_mart, "test-mart", "tst")
@@ -307,22 +407,35 @@ class TestSuccessfulScaffold:
                     assert "select *" not in stripped.lower(), \
                         f"{sql_file.name} uses SELECT *: {stripped}"
 
-    def test_schema_yml_created(self, signed_mart):
+    def test_schema_yml_references_all_models(self, signed_mart):
         scaffold(signed_mart, "test-mart", "tst")
         schema = signed_mart / "models" / "schema.yml"
         assert schema.exists()
         content = schema.read_text()
+        assert "tst_ods_csv_sample" in content
         assert "tst_dim_date" in content
+        assert "tst_dwd_daily_sample_di" in content
+        assert "tst_dws_daily_revenue_1d" in content
+        assert "tst_ads_exec_dashboard" in content
+        assert "raw_sample_data" in content
+        assert "dim_date" in content
 
-    def test_dashboard_created_with_visualization(self, signed_mart):
+    def test_both_seeds_created(self, signed_mart):
+        scaffold(signed_mart, "test-mart", "tst")
+        assert (signed_mart / "seeds" / "raw_sample_data.csv").exists()
+        assert (signed_mart / "seeds" / "dim_date.csv").exists()
+
+    def test_dashboard_created_with_db_connection(self, signed_mart):
         scaffold(signed_mart, "test-mart", "tst")
         app = signed_mart / "dashboard" / "app.py"
         assert app.exists()
         content = app.read_text()
         assert "test-mart" in content
-        assert "streamlit" in content
-        assert "st.header" in content or "st.title" in content
-        assert "scorecard" in content.lower() or "quality" in content.lower()
+        assert "duckdb" in content
+        assert "get_connection" in content
+        assert "load_ads_data" in content
+        assert "tst_ads_exec_dashboard" in content
+        assert "scorecard" in content.lower()
         assert "provenance" in content.lower()
 
     def test_scorecard_json_created(self, signed_mart):
@@ -336,7 +449,7 @@ class TestSuccessfulScaffold:
     def test_dqc_update_script_created(self, signed_mart):
         scaffold(signed_mart, "test-mart", "tst")
         dqc_script = signed_mart / "scripts" / "dqc_update.py"
-        assert dqc_script.exists(), "Scaffold did not generate scripts/dqc_update.py"
+        assert dqc_script.exists()
         content = dqc_script.read_text()
         assert "scorecard" in content.lower()
 
@@ -352,12 +465,35 @@ class TestSuccessfulScaffold:
         pipeline = signed_mart / ".github" / "workflows" / "daily.yml"
         content = pipeline.read_text()
         if "scripts/dqc_update.py" in content:
-            assert (signed_mart / "scripts" / "dqc_update.py").exists(), \
-                "Pipeline references scripts/dqc_update.py but it was not generated"
+            assert (signed_mart / "scripts" / "dqc_update.py").exists()
 
-    def test_seeds_created(self, signed_mart):
+    def test_singular_test_created(self, signed_mart):
         scaffold(signed_mart, "test-mart", "tst")
-        assert (signed_mart / "seeds").is_dir()
+        test_file = signed_mart / "tests" / "test_tst_ods_no_duplicate_keys.sql"
+        assert test_file.exists()
+        content = test_file.read_text()
+        assert "ref('tst_ods_csv_sample')" in content
+        assert "record_id" in content
+
+
+class TestDbtIntegration:
+    """End-to-end: scaffold then dbt parse/seed/run/test."""
+
+    def test_scaffold_and_dbt_pipeline(self, signed_mart):
+        result = scaffold(signed_mart, "test-mart", "tst")
+        assert result["success"], f"Scaffold failed: {result['errors']}"
+
+        for step in ["parse", "seed", "run", "test"]:
+            cmd = ["dbt", step, "--profiles-dir", ".", "--target", "ci"]
+            r = subprocess.run(
+                cmd, cwd=str(signed_mart),
+                capture_output=True, text=True, timeout=120,
+            )
+            assert r.returncode == 0, (
+                f"dbt {step} failed (rc={r.returncode}):\n"
+                f"STDOUT:\n{r.stdout[-2000:]}\n"
+                f"STDERR:\n{r.stderr[-2000:]}"
+            )
 
 
 class TestSignOffDetection:
@@ -371,6 +507,16 @@ class TestSignOffDetection:
         doc.write_text("# Doc\nAPPROVED by reviewer.\n")
         assert _is_signed(doc)
 
+    def test_grade_b_not_signed(self, tmp_path):
+        doc = tmp_path / "doc.md"
+        doc.write_text("# Doc\nGrade: B\n")
+        assert not _is_signed(doc)
+
+    def test_grade_b_with_approved_not_signed(self, tmp_path):
+        doc = tmp_path / "doc.md"
+        doc.write_text("# Doc\nGrade: B\nAPPROVED\n")
+        assert not _is_signed(doc)
+
     def test_unsigned_doc(self, tmp_path):
         doc = tmp_path / "doc.md"
         doc.write_text("# Doc\nDraft version, not approved.\n")
@@ -378,3 +524,18 @@ class TestSignOffDetection:
 
     def test_missing_doc_not_signed(self, tmp_path):
         assert not _is_signed(tmp_path / "nonexistent.md")
+
+
+class TestNameSanitization:
+    def test_kebab_to_snake(self, signed_mart):
+        result = scaffold(signed_mart, "my-test-mart", "tst")
+        assert result["success"]
+        content = (signed_mart / "dbt_project.yml").read_text()
+        assert "my_test_mart" in content
+        assert "my-test-mart" not in content
+
+    def test_already_clean_name(self, signed_mart):
+        result = scaffold(signed_mart, "clean_name", "tst")
+        assert result["success"]
+        content = (signed_mart / "dbt_project.yml").read_text()
+        assert "clean_name" in content
