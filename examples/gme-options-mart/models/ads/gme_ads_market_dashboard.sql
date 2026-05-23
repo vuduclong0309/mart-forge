@@ -15,6 +15,22 @@ sentiment AS (
     FROM {{ ref('gme_dws_social_sentiment_1d') }}
 ),
 
+trends_7d AS (
+    SELECT pull_date, ticker,
+           avg_spot_7d, min_spot_7d, max_spot_7d, spot_return_pct_7d,
+           avg_net_gex_7d, avg_iv30_7d, avg_pc_ratio_7d,
+           avg_dealer_net_gamma_7d, avg_hv20_7d, observation_count_7d
+    FROM {{ ref('gme_dws_market_trends_7d') }}
+),
+
+trends_30d AS (
+    SELECT pull_date, ticker,
+           avg_spot_30d, min_spot_30d, max_spot_30d, spot_return_pct_30d,
+           avg_net_gex_30d, avg_iv30_30d, avg_pc_ratio_30d,
+           avg_dealer_net_gamma_30d, avg_hv20_30d, observation_count_30d
+    FROM {{ ref('gme_dws_market_trends_30d') }}
+),
+
 date_dim AS (
     SELECT full_date, year, quarter, month_name, day_name, is_trading_day
     FROM {{ ref('gme_dim_date') }}
@@ -49,12 +65,38 @@ SELECT
     m.iv_percentile,
 
     ss.social_mention_count,
-    ss.social_sentiment_score
+    ss.social_sentiment_score,
+
+    t7.avg_spot_7d,
+    t7.min_spot_7d,
+    t7.max_spot_7d,
+    t7.spot_return_pct_7d,
+    t7.avg_net_gex_7d,
+    t7.avg_iv30_7d,
+    t7.avg_pc_ratio_7d,
+    t7.avg_dealer_net_gamma_7d,
+    t7.avg_hv20_7d,
+    t7.observation_count_7d,
+
+    t30.avg_spot_30d,
+    t30.min_spot_30d,
+    t30.max_spot_30d,
+    t30.spot_return_pct_30d,
+    t30.avg_net_gex_30d,
+    t30.avg_iv30_30d,
+    t30.avg_pc_ratio_30d,
+    t30.avg_dealer_net_gamma_30d,
+    t30.avg_hv20_30d,
+    t30.observation_count_30d
 
 FROM snapshot sn
 LEFT JOIN metrics m
     ON sn.pull_date = m.pull_date AND sn.ticker = m.ticker
 LEFT JOIN sentiment ss
     ON sn.pull_date = ss.pull_date AND sn.ticker = ss.ticker
+LEFT JOIN trends_7d t7
+    ON sn.pull_date = t7.pull_date AND sn.ticker = t7.ticker
+LEFT JOIN trends_30d t30
+    ON sn.pull_date = t30.pull_date AND sn.ticker = t30.ticker
 LEFT JOIN date_dim d
     ON sn.pull_date = d.full_date

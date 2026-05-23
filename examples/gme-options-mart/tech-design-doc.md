@@ -9,6 +9,7 @@
 | Version | Description | Date | Editor |
 |---------|-------------|------|--------|
 | V1.0 | Initial TDD authored from final built mart (post DATA-01/02/03) | 2026-05-23 | mart-forge maintainers |
+| V1.1 | Add DWS market trends (7d/30d trailing-window aggregations) | 2026-05-23 | DROOK-OPUS (ITER2-09) |
 
 ---
 
@@ -113,6 +114,8 @@ Facts fall into two categories:
 | Daily market snapshot | not applicable | not applicable | not applicable | gme_dws_daily_snapshot_1d | not applicable | pull_date, ticker |
 | Phase-1 options metrics | not applicable | not applicable | not applicable | gme_dws_options_metrics_1d | not applicable | pull_date, ticker |
 | Social sentiment daily | not applicable | not applicable | not applicable | gme_dws_social_sentiment_1d | not applicable | pull_date, ticker |
+| 7-day market trends | not applicable | not applicable | not applicable | gme_dws_market_trends_7d | not applicable | pull_date, ticker |
+| 30-day market trends | not applicable | not applicable | not applicable | gme_dws_market_trends_30d | not applicable | pull_date, ticker |
 | Dashboard OBT | not applicable | not applicable | not applicable | not applicable | gme_ads_market_dashboard | pull_date, ticker + dim_date attrs |
 
 ---
@@ -145,11 +148,14 @@ Facts fall into two categories:
 │  │ strike_gex_1d  │  │ snapshot_1d    │  │ options_metrics_1d       │  │
 │  │ (per-strike)   │  │ (per-day)      │  │ (per-day)                │  │
 │  └───────┬────────┘  └───────┬────────┘  └─────────┬────────────────┘  │
-│          │                   │                     │                    │
-│          │           ┌───────┴────────┐    ┌───────┴──────────────┐    │
-│          │           │                │    │ social_sentiment_1d  │    │
-│          │           │                │    │ (per-day)            │    │
-│          │           │                │    └──────────────────────┘    │
+│          │                   │                      │                   │
+│          │            ┌──────┴──────┐       ┌───────┴──────────────┐   │
+│          │            │             │       │ social_sentiment_1d  │   │
+│          │            ▼             ▼       │ (per-day)            │   │
+│          │  ┌──────────────┐ ┌───────────┐  └──────────────────────┘   │
+│          │  │ trends_7d    │ │ trends_30d│                             │
+│          │  │ (trailing)   │ │ (trailing)│                             │
+│          │  └──────────────┘ └───────────┘                             │
 ├──────────┼───────────┼────────────────┼────────────────────────────────┤
 │                         DWD (Detail Fact)                               │
 │                              │                                          │
@@ -375,6 +381,54 @@ Facts fall into two categories:
 | social_mention_count | BIGINT | Total social media mentions for the day | 150 | `SUM(mention_count)` | gme_social_sentiment (seed) |
 | social_sentiment_score | DOUBLE | Mention-weighted average sentiment (−1 to +1) | 0.3200 | `ROUND(SUM(sentiment_score * mention_count) / NULLIF(SUM(mention_count), 0), 4)` | gme_social_sentiment (seed) |
 
+#### gme_dws_market_trends_7d
+
+- **Materialization:** Table
+- **Grain:** One row per pull_date per ticker
+- **Refresh frequency:** Daily
+- **Sources:** `gme_dws_daily_snapshot_1d`, `gme_dws_options_metrics_1d`
+- **Window type:** Observation-based (`ROWS BETWEEN 6 PRECEDING AND CURRENT ROW`)
+- **Fixture behavior:** With a single fixture date, all trailing averages equal the single-day values and `observation_count_7d = 1`.
+
+| column_name | data_type | definition | example_value | calculation | data_source |
+|-------------|-----------|-----------|---------------|-------------|-------------|
+| pull_date | DATE | Pull date | 2026-05-20 | `pull_date` from snapshot_1d | gme_dws_daily_snapshot_1d |
+| ticker | VARCHAR | Underlying ticker | GME | `ticker` from snapshot_1d | gme_dws_daily_snapshot_1d |
+| avg_spot_7d | DOUBLE | 7-day trailing average spot | 28.50 | `ROUND(AVG(spot) OVER w, 4)` | gme_dws_daily_snapshot_1d |
+| min_spot_7d | DOUBLE | 7-day trailing minimum spot | 27.80 | `ROUND(MIN(spot) OVER w, 4)` | gme_dws_daily_snapshot_1d |
+| max_spot_7d | DOUBLE | 7-day trailing maximum spot | 29.10 | `ROUND(MAX(spot) OVER w, 4)` | gme_dws_daily_snapshot_1d |
+| spot_return_pct_7d | DOUBLE | 7-day spot return (%) | 2.50 | `ROUND((spot - FIRST_VALUE(spot) OVER w) / NULLIF(FIRST_VALUE(spot) OVER w, 0) * 100, 2)` | gme_dws_daily_snapshot_1d |
+| avg_net_gex_7d | DOUBLE | 7-day trailing average net GEX | 145000.00 | `ROUND(AVG(net_gex) OVER w, 2)` | gme_dws_daily_snapshot_1d |
+| avg_iv30_7d | DOUBLE | 7-day trailing average IV30 | 0.8400 | `ROUND(AVG(iv30) OVER w, 4)` | gme_dws_options_metrics_1d |
+| avg_pc_ratio_7d | DOUBLE | 7-day trailing average P/C ratio | 0.8700 | `ROUND(AVG(pc_ratio) OVER w, 4)` | gme_dws_daily_snapshot_1d |
+| avg_dealer_net_gamma_7d | DOUBLE | 7-day trailing average dealer net gamma | 240000.00 | `ROUND(AVG(dealer_net_gamma) OVER w, 2)` | gme_dws_options_metrics_1d |
+| avg_hv20_7d | DOUBLE | 7-day trailing average HV20 | 0.6100 | `ROUND(AVG(hv20) OVER w, 4)` | gme_dws_options_metrics_1d |
+| observation_count_7d | INTEGER | Trading days in the window | 7 | `COUNT(*) OVER w` | Derived |
+
+#### gme_dws_market_trends_30d
+
+- **Materialization:** Table
+- **Grain:** One row per pull_date per ticker
+- **Refresh frequency:** Daily
+- **Sources:** `gme_dws_daily_snapshot_1d`, `gme_dws_options_metrics_1d`
+- **Window type:** Observation-based (`ROWS BETWEEN 29 PRECEDING AND CURRENT ROW`)
+- **Fixture behavior:** With a single fixture date, all trailing averages equal the single-day values and `observation_count_30d = 1`.
+
+| column_name | data_type | definition | example_value | calculation | data_source |
+|-------------|-----------|-----------|---------------|-------------|-------------|
+| pull_date | DATE | Pull date | 2026-05-20 | `pull_date` from snapshot_1d | gme_dws_daily_snapshot_1d |
+| ticker | VARCHAR | Underlying ticker | GME | `ticker` from snapshot_1d | gme_dws_daily_snapshot_1d |
+| avg_spot_30d | DOUBLE | 30-day trailing average spot | 27.90 | `ROUND(AVG(spot) OVER w, 4)` | gme_dws_daily_snapshot_1d |
+| min_spot_30d | DOUBLE | 30-day trailing minimum spot | 25.10 | `ROUND(MIN(spot) OVER w, 4)` | gme_dws_daily_snapshot_1d |
+| max_spot_30d | DOUBLE | 30-day trailing maximum spot | 30.20 | `ROUND(MAX(spot) OVER w, 4)` | gme_dws_daily_snapshot_1d |
+| spot_return_pct_30d | DOUBLE | 30-day spot return (%) | 5.80 | `ROUND((spot - FIRST_VALUE(spot) OVER w) / NULLIF(FIRST_VALUE(spot) OVER w, 0) * 100, 2)` | gme_dws_daily_snapshot_1d |
+| avg_net_gex_30d | DOUBLE | 30-day trailing average net GEX | 138000.00 | `ROUND(AVG(net_gex) OVER w, 2)` | gme_dws_daily_snapshot_1d |
+| avg_iv30_30d | DOUBLE | 30-day trailing average IV30 | 0.8100 | `ROUND(AVG(iv30) OVER w, 4)` | gme_dws_options_metrics_1d |
+| avg_pc_ratio_30d | DOUBLE | 30-day trailing average P/C ratio | 0.9000 | `ROUND(AVG(pc_ratio) OVER w, 4)` | gme_dws_daily_snapshot_1d |
+| avg_dealer_net_gamma_30d | DOUBLE | 30-day trailing average dealer net gamma | 235000.00 | `ROUND(AVG(dealer_net_gamma) OVER w, 2)` | gme_dws_options_metrics_1d |
+| avg_hv20_30d | DOUBLE | 30-day trailing average HV20 | 0.5900 | `ROUND(AVG(hv20) OVER w, 4)` | gme_dws_options_metrics_1d |
+| observation_count_30d | INTEGER | Trading days in the window | 22 | `COUNT(*) OVER w` | Derived |
+
 ### 6.5 ADS Layer
 
 #### gme_ads_market_dashboard
@@ -382,7 +436,7 @@ Facts fall into two categories:
 - **Materialization:** Table
 - **Grain:** One row per day
 - **Refresh frequency:** Daily
-- **Sources:** Left-outer join of all DWS models + dim_date
+- **Sources:** Left-outer join of all DWS models (snapshot_1d, metrics_1d, sentiment_1d, trends_7d, trends_30d) + dim_date
 - **Purpose:** One-big-table (OBT) for Streamlit dashboard consumption
 
 | column_name | data_type | definition | example_value | calculation | data_source |
@@ -412,6 +466,26 @@ Facts fall into two categories:
 | iv_percentile | DOUBLE | IV percentile (252-session) | 0.8200 | `m.iv_percentile` | gme_dws_options_metrics_1d |
 | social_mention_count | BIGINT | Social media mentions | 150 | `ss.social_mention_count` | gme_dws_social_sentiment_1d |
 | social_sentiment_score | DOUBLE | Weighted sentiment score | 0.3200 | `ss.social_sentiment_score` | gme_dws_social_sentiment_1d |
+| avg_spot_7d | DOUBLE | 7-day trailing average spot | 28.50 | `t7.avg_spot_7d` | gme_dws_market_trends_7d |
+| min_spot_7d | DOUBLE | 7-day trailing min spot | 27.80 | `t7.min_spot_7d` | gme_dws_market_trends_7d |
+| max_spot_7d | DOUBLE | 7-day trailing max spot | 29.10 | `t7.max_spot_7d` | gme_dws_market_trends_7d |
+| spot_return_pct_7d | DOUBLE | 7-day spot return % | 2.50 | `t7.spot_return_pct_7d` | gme_dws_market_trends_7d |
+| avg_net_gex_7d | DOUBLE | 7-day trailing avg net GEX | 145000.00 | `t7.avg_net_gex_7d` | gme_dws_market_trends_7d |
+| avg_iv30_7d | DOUBLE | 7-day trailing avg IV30 | 0.8400 | `t7.avg_iv30_7d` | gme_dws_market_trends_7d |
+| avg_pc_ratio_7d | DOUBLE | 7-day trailing avg P/C ratio | 0.8700 | `t7.avg_pc_ratio_7d` | gme_dws_market_trends_7d |
+| avg_dealer_net_gamma_7d | DOUBLE | 7-day trailing avg dealer gamma | 240000.00 | `t7.avg_dealer_net_gamma_7d` | gme_dws_market_trends_7d |
+| avg_hv20_7d | DOUBLE | 7-day trailing avg HV20 | 0.6100 | `t7.avg_hv20_7d` | gme_dws_market_trends_7d |
+| observation_count_7d | INTEGER | Trading days in 7d window | 7 | `t7.observation_count_7d` | gme_dws_market_trends_7d |
+| avg_spot_30d | DOUBLE | 30-day trailing average spot | 27.90 | `t30.avg_spot_30d` | gme_dws_market_trends_30d |
+| min_spot_30d | DOUBLE | 30-day trailing min spot | 25.10 | `t30.min_spot_30d` | gme_dws_market_trends_30d |
+| max_spot_30d | DOUBLE | 30-day trailing max spot | 30.20 | `t30.max_spot_30d` | gme_dws_market_trends_30d |
+| spot_return_pct_30d | DOUBLE | 30-day spot return % | 5.80 | `t30.spot_return_pct_30d` | gme_dws_market_trends_30d |
+| avg_net_gex_30d | DOUBLE | 30-day trailing avg net GEX | 138000.00 | `t30.avg_net_gex_30d` | gme_dws_market_trends_30d |
+| avg_iv30_30d | DOUBLE | 30-day trailing avg IV30 | 0.8100 | `t30.avg_iv30_30d` | gme_dws_market_trends_30d |
+| avg_pc_ratio_30d | DOUBLE | 30-day trailing avg P/C ratio | 0.9000 | `t30.avg_pc_ratio_30d` | gme_dws_market_trends_30d |
+| avg_dealer_net_gamma_30d | DOUBLE | 30-day trailing avg dealer gamma | 235000.00 | `t30.avg_dealer_net_gamma_30d` | gme_dws_market_trends_30d |
+| avg_hv20_30d | DOUBLE | 30-day trailing avg HV20 | 0.5900 | `t30.avg_hv20_30d` | gme_dws_market_trends_30d |
+| observation_count_30d | INTEGER | Trading days in 30d window | 22 | `t30.observation_count_30d` | gme_dws_market_trends_30d |
 
 ### 6.6 Seed Tables
 
@@ -501,7 +575,7 @@ attribution, and the same `delete+insert` incremental semantics documented above
 | 1 | PK Integrity | `not_null` + `unique` on date_key (DIM), pull_date (DWS/ADS) | gme_dim_date, gme_dws_daily_snapshot_1d, gme_dws_options_metrics_1d, gme_dws_social_sentiment_1d, gme_ads_market_dashboard | 0 | error | models/schema.yml |
 | 2 | FK Integrity | ADS pull_date → gme_dim_date.full_date relationship | gme_ads_market_dashboard | 0 | error | models/schema.yml |
 | 3 | Freshness | `pull_ts_utc IS NOT NULL` on all ODS rows | gme_ods_cboe_options_chain | 0 | error | tests/test_dqc_freshness.sql |
-| 4 | Completeness | Minimum row counts: fixture mode ODS≥5, DWD≥5, DWS strike≥3, DWS snapshot≥1; live mode ODS≥100, DWD≥50, DWS≥10, snapshot≥1 | gme_ods_cboe_options_chain, gme_dwd_option_contract_di, gme_dws_strike_gex_1d, gme_dws_daily_snapshot_1d | 0 | error | tests/test_dqc_completeness.sql |
+| 4 | Completeness | Minimum row counts: fixture mode ODS≥5, DWD≥5, DWS strike≥3, DWS snapshot≥1, DWS trends≥1; live mode ODS≥100, DWD≥50, DWS≥10, snapshot≥1, trends≥1 | gme_ods_cboe_options_chain, gme_dwd_option_contract_di, gme_dws_strike_gex_1d, gme_dws_daily_snapshot_1d, gme_dws_market_trends_7d, gme_dws_market_trends_30d | 0 | error | tests/test_dqc_completeness.sql |
 | 5 | Accepted Ranges | strike > 0, open_interest ≥ 0 (DWD); spot > 0, pc_ratio ∈ [0, 50] (DWS) | gme_dwd_option_contract_di, gme_dws_daily_snapshot_1d | 0 | error | tests/test_dqc_accepted_ranges.sql |
 | 6 | Duplicate Detection | No duplicate (pull_date, option_symbol) | gme_dwd_option_contract_di | 0 | error | tests/test_dqc_duplicate_detection.sql |
 | 7 | Null-Rate | Greeks (implied_vol, delta, gamma, mid_price) null rate < 5% | gme_dwd_option_contract_di | 5% | warn | tests/test_dqc_null_rate.sql |
@@ -529,6 +603,12 @@ attribution, and the same `delete+insert` incremental semantics documented above
 | gme_dws_options_metrics_1d | ticker | not_null, accepted_values: [GME] |
 | gme_dws_social_sentiment_1d | pull_date | not_null + unique |
 | gme_dws_social_sentiment_1d | ticker | not_null, accepted_values: [GME] |
+| gme_dws_market_trends_7d | pull_date | not_null + unique |
+| gme_dws_market_trends_7d | ticker | not_null, accepted_values: [GME] |
+| gme_dws_market_trends_7d | avg_spot_7d, min_spot_7d, max_spot_7d, observation_count_7d | not_null |
+| gme_dws_market_trends_30d | pull_date | not_null + unique |
+| gme_dws_market_trends_30d | ticker | not_null, accepted_values: [GME] |
+| gme_dws_market_trends_30d | avg_spot_30d, min_spot_30d, max_spot_30d, observation_count_30d | not_null |
 | gme_ads_market_dashboard | pull_date | not_null + unique |
 | gme_ads_market_dashboard | pull_date | relationships → gme_dim_date.full_date |
 | gme_ads_market_dashboard | spot, ticker, gamma_flip_point, iv30, dealer_net_gamma | not_null |
@@ -609,6 +689,26 @@ Every column in `gme_ads_market_dashboard` traces to exactly one DWS model or di
 | iv_percentile | gme_dws_options_metrics_1d | iv_percentile |
 | social_mention_count | gme_dws_social_sentiment_1d | social_mention_count |
 | social_sentiment_score | gme_dws_social_sentiment_1d | social_sentiment_score |
+| avg_spot_7d | gme_dws_market_trends_7d | avg_spot_7d |
+| min_spot_7d | gme_dws_market_trends_7d | min_spot_7d |
+| max_spot_7d | gme_dws_market_trends_7d | max_spot_7d |
+| spot_return_pct_7d | gme_dws_market_trends_7d | spot_return_pct_7d |
+| avg_net_gex_7d | gme_dws_market_trends_7d | avg_net_gex_7d |
+| avg_iv30_7d | gme_dws_market_trends_7d | avg_iv30_7d |
+| avg_pc_ratio_7d | gme_dws_market_trends_7d | avg_pc_ratio_7d |
+| avg_dealer_net_gamma_7d | gme_dws_market_trends_7d | avg_dealer_net_gamma_7d |
+| avg_hv20_7d | gme_dws_market_trends_7d | avg_hv20_7d |
+| observation_count_7d | gme_dws_market_trends_7d | observation_count_7d |
+| avg_spot_30d | gme_dws_market_trends_30d | avg_spot_30d |
+| min_spot_30d | gme_dws_market_trends_30d | min_spot_30d |
+| max_spot_30d | gme_dws_market_trends_30d | max_spot_30d |
+| spot_return_pct_30d | gme_dws_market_trends_30d | spot_return_pct_30d |
+| avg_net_gex_30d | gme_dws_market_trends_30d | avg_net_gex_30d |
+| avg_iv30_30d | gme_dws_market_trends_30d | avg_iv30_30d |
+| avg_pc_ratio_30d | gme_dws_market_trends_30d | avg_pc_ratio_30d |
+| avg_dealer_net_gamma_30d | gme_dws_market_trends_30d | avg_dealer_net_gamma_30d |
+| avg_hv20_30d | gme_dws_market_trends_30d | avg_hv20_30d |
+| observation_count_30d | gme_dws_market_trends_30d | observation_count_30d |
 
 ### 9.2 TDD Metric → SQL Model → DQC Test
 
@@ -632,6 +732,12 @@ Every column in `gme_ads_market_dashboard` traces to exactly one DWS model or di
 | iv_percentile | 6.4 DWS metrics | models/dws/gme_dws_options_metrics_1d.sql | Covered by DWS source tests and ADS dashboard review |
 | social_mention_count | 6.4 DWS sentiment | models/dws/gme_dws_social_sentiment_1d.sql | schema.yml: not_null |
 | social_sentiment_score | 6.4 DWS sentiment | models/dws/gme_dws_social_sentiment_1d.sql | Covered by DWS source tests and ADS dashboard review |
+| avg_spot_7d, min/max_spot_7d, spot_return_pct_7d | 6.4 DWS trends_7d | models/dws/gme_dws_market_trends_7d.sql | schema.yml: not_null on avg/min/max_spot_7d |
+| avg_net_gex_7d, avg_iv30_7d, avg_pc_ratio_7d | 6.4 DWS trends_7d | models/dws/gme_dws_market_trends_7d.sql | Covered by DWS source tests |
+| avg_dealer_net_gamma_7d, avg_hv20_7d | 6.4 DWS trends_7d | models/dws/gme_dws_market_trends_7d.sql | Covered by DWS source tests |
+| avg_spot_30d, min/max_spot_30d, spot_return_pct_30d | 6.4 DWS trends_30d | models/dws/gme_dws_market_trends_30d.sql | schema.yml: not_null on avg/min/max_spot_30d |
+| avg_net_gex_30d, avg_iv30_30d, avg_pc_ratio_30d | 6.4 DWS trends_30d | models/dws/gme_dws_market_trends_30d.sql | Covered by DWS source tests |
+| avg_dealer_net_gamma_30d, avg_hv20_30d | 6.4 DWS trends_30d | models/dws/gme_dws_market_trends_30d.sql | Covered by DWS source tests |
 | mid_price | 6.3 DWD | models/dwd/gme_dwd_option_contract_di.sql | Covered by DWD source tests and DQC null-rate test |
 | dte | 6.3 DWD | models/dwd/gme_dwd_option_contract_di.sql | Covered by DWD source tests and DTE filter in DWD model |
 | series_type | 6.3 DWD | models/dwd/gme_dwd_option_contract_di.sql | schema.yml: accepted_values |
